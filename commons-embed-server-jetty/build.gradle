@@ -1,0 +1,15 @@
+apply plugin: "java"
+
+dependencies {
+    compile project(":commons-embed-server")
+    
+    // Jetty application server
+    compile "org.eclipse.jetty.aggregate:jetty-all:${version_jetty}"
+    compile "org.eclipse.jetty:jetty-annotations:${version_jetty}"
+    compile "org.eclipse.jetty:jetty-plus:${version_jetty}"
+    compile "org.eclipse.jetty:jetty-deploy:${version_jetty}"
+    compile "org.eclipse.jetty:apache-jsp:${version_jetty}"
+    compile "org.eclipse.jetty:apache-jstl:${version_jetty}"
+    
+}
+

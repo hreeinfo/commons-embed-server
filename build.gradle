@@ -1,0 +1,105 @@
+buildscript {
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        jcenter()
+    }
+}
+
+
+configure(allprojects) {
+    group = "${project_group}"
+    version = "${project_version}"
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        jcenter()
+    }
+}
+
+
+configure(subprojects) {
+    apply plugin: "java"
+    apply plugin: "maven"
+
+    compileJava {
+        sourceCompatibility = "1.8"
+        targetCompatibility = "1.8"
+        options.compilerArgs += "-Xlint:-options";
+
+        // 在独立的进程中编译 使用增量编译
+        //options.fork = true
+        //options.incremental = true
+    }
+    compileTestJava {
+        sourceCompatibility = "1.8"
+        targetCompatibility = "1.8"
+        options.compilerArgs += "-Xlint:-options";
+
+        // 在独立的进程中编译 使用增量编译
+        //options.fork = true
+        //options.incremental = true
+    }
+
+    javadoc {
+        exclude("**/internal/**", "**/Internal*", "**/*Internal", "**/Test*", "**/*Test", "**/temp/**")
+        failOnError = false
+        options.quiet()
+
+        options.charSet("UTF-8")
+        options.docEncoding("UTF-8")
+        options.locale("zh_CN")
+
+        options.quiet()
+        options.showFromPublic()
+        options.header("${project_title}")
+        options.windowTitle("${project_title}")
+        options.docTitle("${project_title}")
+        options.footer("${project_productor}")
+
+        options.addStringOption("Xdoclint:none Xdoclint:-accessibility Xdoclint:-html Xdoclint:-missing Xdoclint:-syntax")
+
+        options.author()
+        options.splitIndex()
+        options.serialWarn()
+
+        options.links(
+                "http://docs.oracle.com/javase/8/docs/api/",
+                "http://docs.spring.io/spring/docs/current/javadoc-api/"
+        )
+    }
+}
+
+apply plugin: "java"
+
+task appdoc(type: Javadoc) {
+    exclude("**/internal/**", "**/Internal*", "**/*Internal", "**/Test*", "**/*Test", "**/temp/**")
+    failOnError = false
+    options.quiet()
+
+    options.charSet("UTF-8")
+    options.docEncoding("UTF-8")
+    options.locale("zh_CN")
+
+    options.quiet()
+
+    options.showFromPublic()
+    options.header("${project_title}")
+    options.windowTitle("${project_title}")
+    options.docTitle("${project_title}")
+    options.footer("${project_productor}")
+
+    options.author()
+    options.splitIndex()
+    options.serialWarn()
+
+    source subprojects.collect { project -> project.sourceSets.main.allJava }
+    destinationDir = new File(buildDir, 'javadoc')
+    classpath = files(subprojects.collect { project -> project.sourceSets.main.compileClasspath })
+
+    options.links(
+            "http://docs.oracle.com/javase/8/docs/api/",
+            "http://docs.spring.io/spring/docs/current/javadoc-api/"
+    )
+}
+
