@@ -1,7 +1,7 @@
 apply plugin: "java"
 
 dependencies {
-    compile "org.apache.commons:commons-lang3:${version_commons_long3}"
-    compile "net.sf.jopt-simple:jopt-simple:${version_jopt}"
+    compile("org.apache.commons:commons-lang3:${version_commons_long3}")
+    compile("net.sf.jopt-simple:jopt-simple:${version_jopt}")
 }
 

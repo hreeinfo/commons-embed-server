@@ -1,9 +1,9 @@
 apply plugin: "java"
 
 dependencies {
-    compile project(":commons-embed-server")
+    compile(project(":commons-embed-server"))
     
     // Payara application server
-    compileOnly "fish.payara.extras:payara-embedded-web:${version_payara}"
+    compile("fish.payara.extras:payara-embedded-web:${version_payara}")
 }
 
