@@ -251,8 +251,4 @@ public class TomcatServerImpl implements TomcatServer {
                 + TEMP_DIR_ATTEMPTS + " attempts (tried "
                 + baseName + "0 to " + baseName + (TEMP_DIR_ATTEMPTS - 1) + ')');
     }
-
-    public static void main(String[] args) {
-        System.out.println(Arrays.toString(new File("/Users/xingxiuyi/Data/develop/product/box/core/commons/source/develop/commons-embed-server/commons-embed-server-tomcat/src/test/stres").list()));
-    }
 }
