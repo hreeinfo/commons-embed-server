@@ -28,7 +28,7 @@ configure(allprojects) {
             mavenJava(MavenPublication) {
                 pom.withXml {
                     def root = asNode()
-                    root.appendNode("name", "Commons embed server")
+                    root.appendNode("name", "commons-embed-server")
                     root.appendNode("description", "Commons embed server package, use for unit test and plugins.")
                     root.appendNode("url", "https://github.com/hreeinfo/commons-embed-server")
                     root.appendNode("inceptionYear", "2018")
