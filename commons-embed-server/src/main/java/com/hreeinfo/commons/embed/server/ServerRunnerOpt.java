@@ -21,7 +21,6 @@ public class ServerRunnerOpt implements Serializable {
     private List<String> classesdirs = new ArrayList<>();
     private List<String> resourcesdirs = new ArrayList<>();
     private String configfile = "";
-    private String workdir = "";
     private String loglevel = "DEBUG";
     private Map<String, String> options = new LinkedHashMap<>();
 
@@ -40,7 +39,6 @@ public class ServerRunnerOpt implements Serializable {
         parser.accepts("classesdir").withOptionalArg();
         parser.accepts("resourcesdir").withOptionalArg();
         parser.accepts("configfile").withOptionalArg();
-        parser.accepts("workdir").withOptionalArg();
         parser.accepts("loglevel").withOptionalArg();
 
 
@@ -56,7 +54,6 @@ public class ServerRunnerOpt implements Serializable {
         sro.classesdirs.addAll(optString(osts, "classesdir"));
         sro.resourcesdirs.addAll(optString(osts, "resourcesdir"));
         sro.configfile = optString(osts, "configfile", "");
-        sro.workdir = optString(osts, "workdir", "");
         sro.loglevel = StringUtils.upperCase(optString(osts, "loglevel", "INFO"));
 
         return sro;
@@ -117,7 +114,6 @@ public class ServerRunnerOpt implements Serializable {
             if (StringUtils.isNotBlank(s)) sb.append("--resourcesdir=").append(s).append(" ");
         }
         if (StringUtils.isNotBlank(this.configfile)) sb.append("--configfile=").append(this.configfile).append(" ");
-        if (StringUtils.isNotBlank(this.workdir)) sb.append("--workdir=").append(this.workdir).append(" ");
         if (StringUtils.isNotBlank(this.loglevel)) sb.append("--loglevel=").append(this.loglevel).append(" ");
 
         // options 额外配置选项无法作为其他参数附加
@@ -163,11 +159,6 @@ public class ServerRunnerOpt implements Serializable {
         return this;
     }
 
-    public ServerRunnerOpt workdir(String workdir) {
-        this.workdir = workdir;
-        return this;
-    }
-
     public ServerRunnerOpt loglevel(String loglevel) {
         this.loglevel = loglevel;
         return this;
@@ -188,6 +179,27 @@ public class ServerRunnerOpt implements Serializable {
         if (opts != null) this.options.putAll(opts);
 
         return this;
+    }
+
+    public String optionValue(String name) {
+        if (StringUtils.isBlank(name)) return null;
+
+        return this.options.get(name);
+    }
+
+    public int optionValueInt(String name) {
+        if (StringUtils.isBlank(name)) return 0;
+
+        String strValue = this.options.get(name);
+
+        if (StringUtils.isBlank(strValue)) return 0;
+
+        try {
+            return Integer.valueOf(StringUtils.trim(strValue));
+        } catch (Throwable e) {
+        }
+
+        return 0;
     }
 
 
@@ -248,14 +260,6 @@ public class ServerRunnerOpt implements Serializable {
         this.configfile = configfile;
     }
 
-    public String getWorkdir() {
-        return workdir;
-    }
-
-    public void setWorkdir(String workdir) {
-        this.workdir = workdir;
-    }
-
     public String getLoglevel() {
         return loglevel;
     }
@@ -282,7 +286,6 @@ public class ServerRunnerOpt implements Serializable {
                 ", classesdirs=" + classesdirs +
                 ", resourcesdirs=" + resourcesdirs +
                 ", configfile='" + configfile + '\'' +
-                ", workdir='" + workdir + '\'' +
                 ", loglevel='" + loglevel + '\'' +
                 ", options=" + options +
                 '}';

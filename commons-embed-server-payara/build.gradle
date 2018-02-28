@@ -4,6 +4,6 @@ dependencies {
     compile(project(":commons-embed-server"))
     
     // Payara application server
-    compile("fish.payara.extras:payara-embedded-web:${version_payara}")
+    compile("fish.payara.extras:payara-micro:${version_payara}")
 }
 

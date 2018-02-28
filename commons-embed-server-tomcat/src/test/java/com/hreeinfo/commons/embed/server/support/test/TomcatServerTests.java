@@ -1,7 +1,7 @@
 package com.hreeinfo.commons.embed.server.support.test;
 
 import com.hreeinfo.commons.embed.server.ServerRunnerOpt;
-import com.hreeinfo.commons.embed.server.support.JettyServerRunner;
+import com.hreeinfo.commons.embed.server.support.TomcatServerRunner;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
@@ -9,11 +9,12 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
+ * 测试tomcat server
  * <p>创建作者：xingxiuyi </p>
- * <p>创建日期：2018/2/24 </p>
+ * <p>创建日期：2018/2/28 </p>
  * <p>版权所属：xingxiuyi </p>
  */
-public class JettyServerTests {
+public class TomcatServerTests {
     private static List<String> getTestClassPaths() {
         String[] acps = StringUtils.split(System.getProperty("java.class.path"), ":");
         return Arrays.asList(acps);
@@ -21,7 +22,7 @@ public class JettyServerTests {
 
     private static String getTestResourcePath() {
         try {
-            String path = System.getProperty("user.dir") + "/commons-embed-server-jetty/src/test/resources";
+            String path = System.getProperty("user.dir") + "/commons-embed-server-tomcat/src/test/resources";
             if (new File(path).exists()) return path;
 
             path = System.getProperty("user.dir") + "/src/test/resources";
@@ -35,7 +36,7 @@ public class JettyServerTests {
 
     private static String getTestWebappPath() {
         try {
-            String path = System.getProperty("user.dir") + "/commons-embed-server-jetty/src/test/web";
+            String path = System.getProperty("user.dir") + "/commons-embed-server-tomcat/src/test/web";
             if (new File(path).exists()) return path;
 
             path = System.getProperty("user.dir") + "/src/test/web";
@@ -47,18 +48,24 @@ public class JettyServerTests {
         throw new IllegalArgumentException("未找到项目 resources 目录");
     }
 
-    public static void main(String[] args) throws Exception {
-        StringBuilder sb = new StringBuilder();
+    public static void main(String[] args) {
+        ServerRunnerOpt opt = new ServerRunnerOpt();
+        opt.context("/").port(8080)
+                .webappdir(getTestWebappPath())
+                .classesdir()
+                .resourcesdir(getTestResourcePath() + "/addtion")
+                .option("cacheSize", "100000");
 
-        sb.append("--webappdir=").append(getTestWebappPath()).append(" ");
 
-        List<String> cps = getTestClassPaths();
-        //for (String s : cps) sb.append("--classesdir=").append(s).append(" ");
+        final TomcatServerRunner runner = new TomcatServerRunner(opt);
 
-        sb.append("--resourcesdir=").append(getTestResourcePath()).append(" ");
-        sb.append("--loglevel=").append("OFF").append(" ");
 
-        JettyServerRunner runner = new JettyServerRunner(ServerRunnerOpt.loadFromOpts(StringUtils.split(sb.toString(), " ")));
-        runner.start();
+        try {
+            runner.start();
+        } catch (Throwable e) {
+            e.printStackTrace();
+        } finally {
+            runner.stop();
+        }
     }
 }
