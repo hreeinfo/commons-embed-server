@@ -86,8 +86,7 @@ public class TomcatServerRunner extends BaseServerRunner {
         this.server.createLoader(Thread.currentThread().getContextClassLoader());
 
         // 配置 webapplication
-        // 增加额外的资源文件
-        // TODO 目前所增加的文件比webappdir目录文件优先 所以对于新增目录存在 WEB-INF/web.xml 的情况考虑是否进行额外处理
+        // 增加额外的资源文件 需确保最后一个资源目录的web.xml（如果存在的话）与最终生成的web.xml一致
         if (this.opt.getResourcesdirs() != null) for (String s : this.opt.getResourcesdirs()) {
             File sf = new File(s);
             if (sf.exists()) {
@@ -116,6 +115,8 @@ public class TomcatServerRunner extends BaseServerRunner {
         // 配置 server
         this.server.configureContainer();
         this.server.configureHttpConnector(this.opt.getPort(), "UTF-8", TomcatServer.DEFAULT_PROTOCOL_HANDLER_NAME);
+
+        // TODO 增加默认配置cmd 用于额外的配置
     }
 
     protected URL getConfigFile() {

@@ -1,6 +1,8 @@
 package com.hreeinfo.commons.embed.server.support.test;
 
+import com.hreeinfo.commons.embed.server.ServerRunner;
 import com.hreeinfo.commons.embed.server.ServerRunnerOpt;
+import com.hreeinfo.commons.embed.server.Servers;
 import com.hreeinfo.commons.embed.server.support.TomcatServerRunner;
 import org.apache.commons.lang3.StringUtils;
 
@@ -50,15 +52,15 @@ public class TomcatServerTests {
 
     public static void main(String[] args) {
         ServerRunnerOpt opt = new ServerRunnerOpt();
-        opt.context("/").port(8080)
+        opt.type("TOMCAT").context("/aa").port(8080)
                 .webappdir(getTestWebappPath())
                 .classesdir()
                 .resourcesdir(getTestResourcePath() + "/addtion")
                 .option("cacheSize", "100000");
 
+        System.out.println("命令行参数：" + opt.toParams());
 
-        final TomcatServerRunner runner = new TomcatServerRunner(opt);
-
+        final ServerRunner runner = Servers.server(StringUtils.split(opt.toParams(), " "));
 
         try {
             runner.start();
