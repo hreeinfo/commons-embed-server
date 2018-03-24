@@ -1,7 +1,7 @@
 package com.hreeinfo.commons.embed.server.support.test;
 
-import com.hreeinfo.commons.embed.server.ServerRunnerOpt;
-import com.hreeinfo.commons.embed.server.support.JettyServerRunner;
+import com.hreeinfo.commons.embed.server.EmbedServer;
+import com.hreeinfo.commons.embed.server.support.EmbedJettyServer;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
@@ -48,17 +48,15 @@ public class JettyServerTests {
     }
 
     public static void main(String[] args) throws Exception {
-        StringBuilder sb = new StringBuilder();
-
-        sb.append("--webappdir=").append(getTestWebappPath()).append(" ");
-
         List<String> cps = getTestClassPaths();
-        //for (String s : cps) sb.append("--classesdir=").append(s).append(" ");
 
-        sb.append("--resourcesdir=").append(getTestResourcePath()).append(" ");
-        sb.append("--loglevel=").append("OFF").append(" ");
+        EmbedServer server = EmbedServer.builder()
+                .port(8080).context("/aa").loglevel("INFO")
+                .webapp(getTestWebappPath())
+                .classesdir(cps.toArray(new String[cps.size()]))
+                .resourcedir(getTestResourcePath())
+                .build(EmbedJettyServer.class, e -> System.out.println(e.getClass() + " 配置完成"));
 
-        JettyServerRunner runner = new JettyServerRunner(ServerRunnerOpt.loadFromOpts(StringUtils.split(sb.toString(), " ")));
-        runner.start();
+        server.start();
     }
 }

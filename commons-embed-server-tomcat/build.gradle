@@ -2,6 +2,7 @@ apply plugin: "java"
 
 dependencies {
     compile(project(":commons-embed-server"))
+    compile("commons-io:commons-io:${version_commons_io}")
 
     // Tomcat application server
     compile("org.apache.tomcat.embed:tomcat-embed-core:${version_tomcat}")
