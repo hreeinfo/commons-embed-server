@@ -50,7 +50,7 @@ public class EmbedTomcatServer extends BaseEmbedServer {
     public static final String OPTION_CACHE_SIZE = "cache_size";
     public static final String OPTION_DEFAULT_WEB_XML = "default_web_xml";
     public static final String OPTION_WEBINF_CLASS_RESOURCES = "webinf_classes"; // 多个值用,分隔
-    public static final String OPTION_USERS = "realm_user"; // user.password.role1,role2:user1.password.role
+    public static final String OPTION_USERS = "tomcat_user"; // user.password.role1,role2:user1.password.role
 
     public static final String GLOBAL_CLASSPATH_CONF_ROOT = "META-INF/embed/tomcat";
 

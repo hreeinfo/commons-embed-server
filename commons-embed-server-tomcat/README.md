@@ -2,8 +2,16 @@
 
 ### 支持的配置参数 option
 
-* jetty_classpaths=true - classpathdirs使用jetty内部的classpath机制，而不是使用启动线程的contextloader
-* jetty_configurations=*,other_class_name - 用于重写jetty的configurations
-  * 每个configuration为完整类名，多个值之间用,分隔
-  * 如果以包含*，仅增加额外的配置，出现*的位置用默认实例填充；否则以当前定义值重写整体configurations
+* protocol - Tomcat Connector 对应的 handler，默认为：org.apache.coyote.http11.Http11NioProtocol
+* uri_encoding=UTF-8 - 处理URI时的路径编码
+* reloadable=true - 是否载入
+* cache_size=16384 - Tomcat启动时如果资源过多会引起cache警告，通过此参数控制cache容量大小，其中
+  * 值必须为整数
+  * -1 - 关闭cache
+  * 0 - 为恢复Tomcat默认模式
+* default_web_xml - 默认的web.xml路径（TODO 目前未生效 待解决）
+* webinf_classes - 需要加入到 /WEB-INF/classes 中的资源路径，多个路径之间用逗号分隔 `,`
+* tomcat_user - Tomcat 用户配置。为了加入多个用户，此配置会查找所有以 tomcat_user 开头的变量作为用户声明
+  * 多个用户可以使用 tomcat_user1 tomcat_user2 tomcat_user3 等多个参数名来配置，每个参数名表示对应的一个用户
+  * 每个用户配置格式为： `user:pass:roles` roles多个值用 `,` 分隔
 * 待补充...
