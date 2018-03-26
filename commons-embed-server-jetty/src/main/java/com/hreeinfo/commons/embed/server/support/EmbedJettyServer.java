@@ -135,8 +135,8 @@ public class EmbedJettyServer extends BaseEmbedServer {
                     Class<?> ct = Class.forName(c);
                     if (ct == null) continue;
 
-                    Object cto = ct.newInstance();
-                    if (cto != null && (cto instanceof Configuration)) configurations.add((Configuration) cto);
+                    Object cto = ct.getConstructor().newInstance();
+                    if (cto instanceof Configuration) configurations.add((Configuration) cto);
                     else throw new IllegalStateException("Configuration类型无法兼容此对象");
                 } catch (Throwable e) {
                     LOG.severe("无法实例化类 " + c + " - " + e.getMessage());

@@ -212,7 +212,7 @@ public interface EmbedServer {
         public <T extends EmbedServer> T build(Class<T> serverType, Consumer<T> config) throws RuntimeException {
             T fes = null;
             try {
-                fes = serverType.newInstance();
+                fes = serverType.getConstructor().newInstance();
             } catch (Throwable e) {
                 LOG.log(Level.SEVERE, "无法构建Server实例 -> " + serverType, e);
             }
