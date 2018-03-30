@@ -2,6 +2,7 @@ package com.hreeinfo.commons.embed.server.support;
 
 import com.hreeinfo.commons.embed.server.BaseEmbedServer;
 import com.hreeinfo.commons.embed.server.EmbedServer;
+import com.hreeinfo.commons.embed.server.internal.InternalFactory;
 import fish.payara.micro.PayaraMicro;
 import fish.payara.micro.PayaraMicroRuntime;
 
@@ -30,13 +31,19 @@ public class EmbedPayaraServer extends BaseEmbedServer {
     }
 
     @Override
-    protected boolean isUseThreadContextLoader() {
-        return true;
+    public ClassLoader getServerContextLoader() {
+        ClassLoader ocl = super.getServerContextLoader();
+
+        if (this.getClassesdirs() == null || this.getClassesdirs().isEmpty()) return ocl;// 没有额外的类路径
+
+        if (ocl == null) ocl = Thread.currentThread().getContextClassLoader();
+
+        return createEmbedServerContextLoader(this.getClassesdirs(), ocl);
     }
 
-    protected PayaraMicroRuntime initPayara(PayaraMicro initMicro, ClassLoader loader) throws RuntimeException {
+    protected PayaraMicroRuntime initPayara(int serverPort, PayaraMicro initMicro, ClassLoader loader) throws RuntimeException {
         try {
-            initMicro.setHttpPort(this.getPort());
+            initMicro.setHttpPort(serverPort);
             return initMicro.bootStrap();
         } catch (Throwable e) {
             LOG.severe("无法创建实例 " + e.getMessage());
@@ -46,16 +53,13 @@ public class EmbedPayaraServer extends BaseEmbedServer {
 
     @Override
     protected void doServerInit(ClassLoader loader, Consumer<EmbedServer> config) throws RuntimeException {
-        if (this.micro == null) {
-            PayaraMicro initMicro = PayaraMicro.getInstance();
+        final int serverPort = (this.getPort() <= 0) ? 8080 : this.getPort();
 
-            PayaraMicroRuntime initRuntime = this.initPayara(initMicro, loader);
+        this.micro = InternalFactory.inst().get("payara_micro", PayaraMicro.class, PayaraMicro::getInstance);
+        this.runtime = InternalFactory.inst().get("payara_runtime_" + serverPort, PayaraMicroRuntime.class,
+                () -> this.initPayara(serverPort, this.micro, loader));
 
-            this.micro = initMicro;
-            this.runtime = initRuntime;
-
-            if (config != null) config.accept(this);
-        }
+        if (config != null) config.accept(this);
     }
 
     @Override
@@ -64,20 +68,12 @@ public class EmbedPayaraServer extends BaseEmbedServer {
 
         if (this.getListeners() != null) this.getListeners().forEach(e -> e.onStarting(this));
 
-        ClassLoader ctxLoader = Thread.currentThread().getContextClassLoader();
-
-        this.payaraThread = new Thread(() -> {
-            if (ctxLoader != null) Thread.currentThread().setContextClassLoader(ctxLoader);
-
-            try {
-                this.runtime.deploy(this.getType(), this.getFullContextPath(false), new File(this.getWebapp()));
-            } catch (Throwable e) {
-                LOG.severe("无法创建实例 " + e.getMessage());
-                throw new IllegalStateException("无法创建实例 " + e.getMessage(), e);
-            }
-        });
-
-        this.payaraThread.run();
+        try {
+            this.runtime.deploy(this.getType(), this.getFullContextPath(false), new File(this.getWebapp()));
+        } catch (Throwable e) {
+            LOG.severe("无法创建实例 " + e.getMessage());
+            throw new IllegalStateException("无法创建实例 " + e.getMessage(), e);
+        }
 
         if (this.getListeners() != null) this.getListeners().forEach(e -> e.onStarted(this));
     }

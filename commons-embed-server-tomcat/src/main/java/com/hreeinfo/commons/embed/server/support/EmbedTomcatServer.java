@@ -2,6 +2,7 @@ package com.hreeinfo.commons.embed.server.support;
 
 import com.hreeinfo.commons.embed.server.BaseEmbedServer;
 import com.hreeinfo.commons.embed.server.EmbedServer;
+import com.hreeinfo.commons.embed.server.internal.InternalFactory;
 import org.apache.catalina.Context;
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.WebResourceRoot;
@@ -19,7 +20,6 @@ import java.io.File;
 import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -49,67 +49,69 @@ public class EmbedTomcatServer extends BaseEmbedServer {
     public static final String OPTION_RELOADABLE = "reloadable";
     public static final String OPTION_CACHE_SIZE = "cache_size";
     public static final String OPTION_DEFAULT_WEB_XML = "default_web_xml";
-    public static final String OPTION_WEBINF_CLASS_RESOURCES = "webinf_classes"; // 多个值用,分隔
+    public static final String OPTION_SCAN_CLASSES_DIR = "classes_dir";
     public static final String OPTION_USERS = "tomcat_user"; // user.password.role1,role2:user1.password.role
 
     public static final String GLOBAL_CLASSPATH_CONF_ROOT = "META-INF/embed/tomcat";
 
-    private volatile Tomcat tomcat;
-    private volatile Context tomcatContext;
+    private volatile File baseDir;
+    private volatile Tomcat tomcatServer;
     private volatile Connector tomcatConnector;
+    private volatile Context tomcatContext;
 
     @Override
     public String getType() {
         return TYPE_NAME;
     }
 
-    @Override
-    protected boolean isUseThreadContextLoader() {
-        return true;
-    }
-
-    public Tomcat getTomcat() {
-        return tomcat;
-    }
-
-    public Context getTomcatContext() {
-        return tomcatContext;
+    public Tomcat getTomcatServer() {
+        return tomcatServer;
     }
 
     public Connector getTomcatConnector() {
         return tomcatConnector;
     }
 
+    public Context getTomcatContext() {
+        return tomcatContext;
+    }
+
+
     @Override
     protected void doServerInit(ClassLoader loader, Consumer<EmbedServer> config) throws RuntimeException {
-        if (this.tomcat == null) {
-            File basedir = null;
+        final int serverPort = (this.getPort() <= 0) ? 8080 : this.getPort();
+        this.baseDir = InternalFactory.inst().get("tomcat_basedir", File.class, () -> {
+            File bdir = null;
             if (StringUtils.isNotBlank(this.getWorkingdir())) {
-                basedir = new File(this.getWorkingdir());
+                bdir = new File(this.getWorkingdir());
             }
 
-            if (basedir == null || !basedir.exists() || !basedir.isDirectory()) basedir = createTempDir();
+            if (bdir == null || !bdir.exists() || !bdir.isDirectory()) bdir = createTempDir();
+            return bdir;
+        });
 
-            Tomcat initTomcat = this.createTomcat(basedir.getAbsolutePath());
-            Context initContext = this.createTomcatContext(initTomcat);
-            Connector initConnector = this.createTomcatConnector(initTomcat, initContext);
+        this.tomcatServer = InternalFactory.inst().get("tomcat_server", Tomcat.class,
+                () -> this.createTomcat(this.baseDir.getAbsolutePath()));
+        this.tomcatConnector = InternalFactory.inst().get("tomcat_connector_" + serverPort, Connector.class,
+                () -> this.createTomcatConnector(this.tomcatServer, serverPort));
 
-            this.configTomcat(basedir, initTomcat, initContext, initConnector, loader);
+        this.tomcatContext = InternalFactory.inst().get("tomcat_context_" + this.getContext(), Context.class, () -> {
+            Context initContext = this.createTomcatContext(this.tomcatServer);
 
-            this.tomcat = initTomcat;
-            this.tomcatContext = initContext;
-            this.tomcatConnector = initConnector;
+            this.configTomcat(this.baseDir, this.tomcatServer, this.tomcatConnector, initContext, loader);
 
-            if (config != null) config.accept(this);
-        }
+            return initContext;
+        });
+
+        if (config != null) config.accept(this);
     }
 
     @Override
     protected void doServerStart() throws RuntimeException {
-        if (this.tomcat == null) throw new IllegalStateException("Tomcat Server 未初始化");
+        if (this.tomcatServer == null) throw new IllegalStateException("Tomcat Server 未初始化");
 
         try {
-            this.tomcat.start();
+            this.tomcatServer.start();
         } catch (Exception e) {
             throw new IllegalStateException("启动服务发生错误", e);
         }
@@ -117,9 +119,9 @@ public class EmbedTomcatServer extends BaseEmbedServer {
 
     @Override
     protected void doServerWait() throws RuntimeException {
-        if (this.tomcat == null) throw new IllegalStateException("Tomcat Server 未初始化");
+        if (this.tomcatServer == null) throw new IllegalStateException("Tomcat Server 未初始化");
         try {
-            this.tomcat.getServer().await();
+            this.tomcatServer.getServer().await();
         } catch (Exception e) {
             throw new IllegalStateException("等待服务发生错误", e);
         }
@@ -127,27 +129,41 @@ public class EmbedTomcatServer extends BaseEmbedServer {
 
     @Override
     protected void doServerStop() throws RuntimeException {
-        if (this.tomcat == null) throw new IllegalStateException("Tomcat Server 未初始化");
+        if (this.tomcatServer == null) throw new IllegalStateException("Tomcat Server 未初始化");
         try {
-            this.tomcat.stop();
+            if (this.tomcatContext != null) {
+                this.tomcatContext.stop();
+                this.tomcatContext.destroy();
+            }
+
+            if (this.tomcatServer != null) this.tomcatServer.stop();
         } catch (Exception e) {
             throw new IllegalStateException("停止服务发生错误", e);
+        } finally {
+            try {
+                if (this.tomcatServer != null) this.tomcatServer.destroy();
+            } catch (Throwable ignored) {
+            }
+
+            this.tomcatServer = null;
+            this.tomcatContext = null;
+            this.tomcatConnector = null;
         }
     }
 
-    protected Tomcat createTomcat(String baseDir) {
+    protected Tomcat createTomcat(String initBaseDir) {
         Tomcat initTomcat = new Tomcat();
-        initTomcat.setBaseDir(baseDir);
+        initTomcat.setBaseDir(initBaseDir);
         return initTomcat;
     }
 
     protected Context createTomcatContext(Tomcat initTomcat) throws RuntimeException {
-        if (initTomcat == null) throw new IllegalStateException("tomcat 未初始化");
+        if (initTomcat == null) throw new IllegalStateException("tomcatServer 未初始化");
 
         return initTomcat.addWebapp(null, getTomcatContextPath(this.getContext()), this.getWebapp());
     }
 
-    protected Connector createTomcatConnector(Tomcat initTomcat, Context initContext) {
+    protected Connector createTomcatConnector(Tomcat initTomcat, int serverPort) {
         String phc = this.option(OPTION_PROTOCOL);
         if (StringUtils.isBlank(phc)) phc = DEFAULT_PROTOCOL_HANDLER_NAME;
 
@@ -155,7 +171,7 @@ public class EmbedTomcatServer extends BaseEmbedServer {
         if (StringUtils.isBlank(uriEncoding)) uriEncoding = DEFAULT_URI_ENCODING;
 
         Connector conn = new Connector(phc);
-        conn.setPort(this.getPort());
+        conn.setPort(serverPort);
         conn.setURIEncoding(uriEncoding);
 
         if (initTomcat.getConnector() != null) initTomcat.getService().removeConnector(initTomcat.getConnector());
@@ -168,10 +184,10 @@ public class EmbedTomcatServer extends BaseEmbedServer {
      * 配置对应参数
      *
      * @param initTomcat
-     * @param initContext
      * @param initConnector
+     * @param initContext
      */
-    protected void configTomcat(File initBasedir, Tomcat initTomcat, Context initContext, Connector initConnector, ClassLoader loader) {
+    protected void configTomcat(File initBasedir, Tomcat initTomcat, Connector initConnector, Context initContext, ClassLoader loader) {
         // ############ Context 配置部分
         StandardRoot sr = new StandardRoot(initContext);
         initContext.setResources(sr);
@@ -205,8 +221,6 @@ public class EmbedTomcatServer extends BaseEmbedServer {
             else sctx.setDefaultWebXml(initBasedir.getAbsolutePath() + "/conf/web.xml");
 
             sctx.setDefaultContextXml("conf/context.xml");
-
-            System.out.println("当前设置 " + sctx.getDefaultWebXml());
         }
 
 
@@ -230,25 +244,10 @@ public class EmbedTomcatServer extends BaseEmbedServer {
      * @param initContext
      */
     protected void processResources(Tomcat initTomcat, Context initContext) {
-        if (this.getResourcesdirs() != null) for (String s : this.getResourcesdirs()) {
-            File sf = new File(s);
-            if (sf.exists()) {
-                LOG.info("增加了额外的资源文件 " + sf);
-                this.addWebappWebappResource(initContext, sf);
-            }
-        }
-
-        String wcrs = this.option(OPTION_WEBINF_CLASS_RESOURCES);
-        if (StringUtils.isNotBlank(wcrs)) {
-            String[] wcr = StringUtils.split(wcrs, ",");
-            if (wcr != null) for (String w : wcr) {
-                File wf = new File(StringUtils.trim(w));
-                if (wf.exists()) {
-                    LOG.info("增加了额外的资源文件 " + wf);
-                    this.addWebappClassPathResource(initContext, wf);
-                }
-            }
-        }
+        if (this.getClassesdirs() != null)
+            this.getClassesdirs().forEach(e -> addWebappClassPathResource(initContext, e));
+        if (this.getResourcesdirs() != null)
+            this.getResourcesdirs().forEach(e -> addWebappWebappResource(initContext, e));
     }
 
     /**
@@ -290,24 +289,29 @@ public class EmbedTomcatServer extends BaseEmbedServer {
     }
 
 
+    /**
+     * 当项目不存在 WEB-INF/classes 时，扫描目标的jar
+     *
+     * @param initContext
+     */
     private void setupClassesJarScanning(Context initContext) {
         JarScanner jsc = initContext.getJarScanner();
         if (jsc != null && (jsc instanceof StandardJarScanner))
             ((StandardJarScanner) jsc).setScanAllDirectories(true);
 
-        for (String c : this.getClassesdirs()) {
-            if (StringUtils.isBlank(c)) continue;
+        String wcpd = this.option(OPTION_SCAN_CLASSES_DIR);
+        if (StringUtils.isNotBlank(wcpd)) {
             try {
-                File cf = new File(c);
+                File cf = new File(wcpd);
                 if (cf.exists() && cf.isDirectory() && cf.canWrite()) {
                     File metaInfDir = new File(cf, "META-INF");
                     if (!metaInfDir.exists()) {
                         boolean success = metaInfDir.mkdir();
-                        if (!success) LOG.warning("无法创建 " + c + "/META-INF ");
+                        if (!success) LOG.warning("无法创建 " + wcpd + "/META-INF ");
                     }
                 }
             } catch (Throwable e) {
-                LOG.warning("处理目录 " + c + " 出错");
+                LOG.warning("处理目录 " + wcpd + " 出错");
             }
         }
     }
@@ -352,8 +356,7 @@ public class EmbedTomcatServer extends BaseEmbedServer {
 
             copyClassPathResourceFile(GLOBAL_CLASSPATH_CONF_ROOT + "/conf/web.xml", new File(confDir, "web.xml"));
             copyClassPathResourceFile(GLOBAL_CLASSPATH_CONF_ROOT + "/conf/context.xml", new File(confDir, "context.xml"));
-
-            System.out.println("导出了文件： " + Arrays.toString(confDir.list()));
+            copyClassPathResourceFile(GLOBAL_CLASSPATH_CONF_ROOT + "/conf/logging.properties", new File(confDir, "logging.properties"));
         } catch (Throwable e) {
             LOG.log(Level.SEVERE, "无法处理 Global 配置文件 " + e.getMessage(), e);
         }
@@ -372,24 +375,33 @@ public class EmbedTomcatServer extends BaseEmbedServer {
         }
     }
 
-    protected void addWebappClassPathResource(Context initContext, File resource) {
+    private static void addTomcatResource(Context initContext, URL resource, String mount) {
+        if (initContext == null || resource == null) return;
+        if (mount == null) mount = "/";
+
+        LOG.info("增加了资源 " + mount + " -> " + resource);
+
+        initContext.getResources().createWebResourceSet(WebResourceRoot.ResourceSetType.PRE, mount, resource, "/");
+    }
+
+    protected void addWebappClassPathResource(Context initContext, String resource) {
         if (resource != null) {
             try {
-                URL rui = resource.toURI().toURL();
-                initContext.getResources().createWebResourceSet(WebResourceRoot.ResourceSetType.PRE, "/WEB-INF/classes", rui, "/");
+                URL rui = toURL(resource, true);
+                if (rui != null) addTomcatResource(initContext, rui, "/WEB-INF/classes");
             } catch (Throwable e) {
-                LOG.warning("无法转换 URI -> " + resource);
+                LOG.log(Level.SEVERE, "无法转换 URI -> " + resource, e);
             }
         }
     }
 
-    protected void addWebappWebappResource(Context initContext, File resource) {
-        if (resource != null && resource.exists()) {
+    protected void addWebappWebappResource(Context initContext, String resource) {
+        if (resource != null) {
             try {
-                URL rui = resource.toURI().toURL();
-                initContext.getResources().createWebResourceSet(WebResourceRoot.ResourceSetType.PRE, "/", rui, "/");
+                URL rui = toURL(resource, true);
+                if (rui != null) addTomcatResource(initContext, rui, "/");
             } catch (Throwable e) {
-                LOG.warning("无法转换 URI -> " + resource);
+                LOG.log(Level.SEVERE, "无法转换 URI -> " + resource, e);
             }
         }
     }
@@ -431,6 +443,21 @@ public class EmbedTomcatServer extends BaseEmbedServer {
                     return cff.toURI().toURL();
                 }
             }
+
+            // 查找classes_dir
+            String wcpd = this.option(OPTION_SCAN_CLASSES_DIR);
+            if (StringUtils.isNotBlank(wcpd)) {
+                try {
+                    File cf = new File(wcpd);
+                    if (cf.exists() && cf.isDirectory()) {
+                        File cff = new File(cf, CONFIG_FILE);
+                        if (cff.exists()) return cff.toURI().toURL();
+                    }
+                } catch (Throwable e) {
+                    LOG.warning("处理目录 " + wcpd + " 出错");
+                }
+            }
+
         } catch (Throwable e) {
             LOG.warning("查找 config.xml 文件错误");
         }

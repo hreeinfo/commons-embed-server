@@ -1,6 +1,7 @@
 package com.hreeinfo.commons.embed.server;
 
-import com.hreeinfo.commons.embed.server.internal.InternalEmbedNullServer;
+import com.hreeinfo.commons.embed.server.internal.InternalNullServer;
+import com.hreeinfo.commons.embed.server.internal.InternalLifeCycleListener;
 import com.hreeinfo.commons.embed.server.internal.InternalOptParsers;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
@@ -8,6 +9,7 @@ import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
 import java.util.*;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -21,6 +23,9 @@ public interface EmbedServer {
     public String getType();
 
     public boolean isRunning();
+
+
+    public void setServerContextLoader(ClassLoader classLoader);
 
     /**
      * 启动服务（前台等待）
@@ -42,6 +47,19 @@ public interface EmbedServer {
     public void start(ClassLoader parentLoader, boolean daemon) throws RuntimeException;
 
     /**
+     * 启动服务 其中服务运行在独立的守护线程中
+     * <p>
+     * 当 daemonThread=true 返回 Future 以便操作服务状态
+     *
+     * @param parentLoader
+     * @param daemon
+     * @param daemonThread
+     * @return
+     * @throws RuntimeException
+     */
+    public Future<?> start(ClassLoader parentLoader, boolean daemon, boolean daemonThread) throws RuntimeException;
+
+    /**
      * 停止服务 停止服务前指定给定操作
      */
     public void stop();
@@ -60,6 +78,10 @@ public interface EmbedServer {
         private final Map<String, String> options = new LinkedHashMap<>();
         private final List<LifeCycleListener> listeners = new ArrayList<>();
         private Consumer<EmbedServer> config;
+
+        private final List<String> serverClasspaths = new ArrayList<>();
+
+        private final InternalLifeCycleListener innerListener = new InternalLifeCycleListener();
 
         private Builder() {
         }
@@ -83,6 +105,11 @@ public interface EmbedServer {
         public Builder webapp(String webapp, boolean war) {
             this.webapp = webapp;
             this.war = (war) ? 1 : -1;
+            return this;
+        }
+
+        public Builder workingdir(String workingdir) {
+            this.workingdir = workingdir;
             return this;
         }
 
@@ -111,6 +138,11 @@ public interface EmbedServer {
             return this;
         }
 
+        public Builder listener(String type, Runnable runnable) {
+            this.innerListener.add(type, runnable);
+            return this;
+        }
+
         public Builder option(String name, String value) {
             if (name != null) this.options.put(name, value);
             return this;
@@ -121,7 +153,12 @@ public interface EmbedServer {
             return this;
         }
 
-        private void setFields(BaseEmbedServer embedServer) {
+        public Builder serverClasspath(String... cps) {
+            if (cps != null) this.serverClasspaths.addAll(Arrays.asList(cps));
+            return this;
+        }
+
+        private void setFields(BaseEmbedServer embedServer, ClassLoader loader) {
             if (embedServer == null) return;
 
 
@@ -135,8 +172,14 @@ public interface EmbedServer {
             embedServer.getClassesdirs().addAll(this.classesdirs);
             embedServer.getResourcesdirs().addAll(this.resourcesdirs);
             embedServer.getOptions().putAll(this.options);
-            embedServer.getListeners().addAll(this.listeners);
+
             embedServer.setConfig(this.config);
+
+            embedServer.getListeners().add(this.innerListener);
+            embedServer.getListeners().addAll(this.listeners);
+
+            // 此处使用独立的 classloader 以附加 serverClasspaths 定义
+            embedServer.setServerContextLoader(loader);
         }
 
         /**
@@ -155,6 +198,7 @@ public interface EmbedServer {
             }
         }
 
+
         /**
          * 构建目标服务对象 如果类型有误（type无效）则返回默认服务对象（此服务什么也不处理仅打印警告）
          *
@@ -163,9 +207,10 @@ public interface EmbedServer {
          * @throws RuntimeException
          */
         public EmbedServer build(String type) throws RuntimeException {
+            ClassLoader loader = BaseEmbedServer.createEmbedServerContextLoader(this.serverClasspaths, null);
             BaseEmbedServer fes = null;
             if (StringUtils.isNotBlank(type)) {
-                final ServiceLoader<EmbedServer> serverLoader = ServiceLoader.load(EmbedServer.class);
+                final ServiceLoader<EmbedServer> serverLoader = ServiceLoader.load(EmbedServer.class, loader);
 
                 for (EmbedServer es : serverLoader) {
                     if (es != null
@@ -177,9 +222,9 @@ public interface EmbedServer {
                 }
             }
 
-            if (fes == null) return new InternalEmbedNullServer();
+            if (fes == null) return new InternalNullServer();
 
-            this.setFields(fes);
+            this.setFields(fes, loader);
 
             return fes;
         }
@@ -210,6 +255,8 @@ public interface EmbedServer {
          */
         @SuppressWarnings("unchecked")
         public <T extends EmbedServer> T build(Class<T> serverType, Consumer<T> config) throws RuntimeException {
+            ClassLoader loader = BaseEmbedServer.createEmbedServerContextLoader(this.serverClasspaths, null);
+
             T fes = null;
             try {
                 fes = serverType.getConstructor().newInstance();
@@ -222,7 +269,7 @@ public interface EmbedServer {
                 this.config = (Consumer<EmbedServer>) config;
             }
 
-            if (fes instanceof BaseEmbedServer) this.setFields((BaseEmbedServer) fes);
+            if (fes instanceof BaseEmbedServer) this.setFields((BaseEmbedServer) fes, loader);
 
             return fes;
         }
@@ -243,6 +290,7 @@ public interface EmbedServer {
             parser.accepts("resourcesdir").withOptionalArg();
             parser.accepts("configfile").withOptionalArg();
             parser.accepts("loglevel").withOptionalArg();
+            parser.accepts("serverClasspaths").withOptionalArg();
 
             OptionSet osts = parser.parse((args != null) ? args : new String[]{});
             if (osts == null) return this;
@@ -254,14 +302,16 @@ public interface EmbedServer {
             this.resourcesdirs.addAll(InternalOptParsers.optString(osts, "resourcesdir"));
             this.configfile = InternalOptParsers.optString(osts, "configfile", "");
             this.loglevel = StringUtils.upperCase(InternalOptParsers.optString(osts, "loglevel", "INFO"));
+            this.serverClasspaths.addAll(InternalOptParsers.optString(osts, "serverClasspaths"));
 
             // TODO 其余的配置参数 作为 options 加入
+            // TODO 此时无法配置 runtime server classpath 需要修正
             return this;
         }
-    }
 
-    public static Builder builder() {
-        return new Builder();
+        public static Builder builder() {
+            return new Builder();
+        }
     }
 
     public interface LifeCycleListener extends EventListener {

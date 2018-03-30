@@ -50,7 +50,7 @@ public class JettyServerTests {
     public static void main(String[] args) throws Exception {
         List<String> cps = getTestClassPaths();
 
-        EmbedServer server = EmbedServer.builder()
+        EmbedServer server = EmbedServer.Builder.builder()
                 .port(8080).context("/aa").loglevel("INFO")
                 .webapp(getTestWebappPath())
                 .classesdir(cps.toArray(new String[cps.size()]))

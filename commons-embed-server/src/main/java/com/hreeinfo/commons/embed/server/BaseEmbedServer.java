@@ -5,10 +5,15 @@ import org.apache.commons.lang3.StringUtils;
 import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -24,8 +29,11 @@ import java.util.logging.Logger;
 public abstract class BaseEmbedServer implements EmbedServer {
     private static final Logger LOG = Logger.getLogger(BaseEmbedServer.class.getName());
     private static final int TEMP_DIR_ATTEMPTS = 10000;
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private final AtomicBoolean running = new AtomicBoolean(Boolean.FALSE);
     private final Lock optLock = new ReentrantLock();
+
+    private volatile Future<?> currentFuture;
 
     private int port = 8080;
     private String context = "";
@@ -39,6 +47,8 @@ public abstract class BaseEmbedServer implements EmbedServer {
     private final Map<String, String> options = new LinkedHashMap<>();
     private final List<LifeCycleListener> listeners = new ArrayList<>();
     private Consumer<EmbedServer> config;
+
+    private ClassLoader serverContextLoader;
 
     public int getPort() {
         return port;
@@ -88,6 +98,10 @@ public abstract class BaseEmbedServer implements EmbedServer {
         return config;
     }
 
+    public ClassLoader getServerContextLoader() {
+        return serverContextLoader;
+    }
+
     public void setPort(int port) {
         this.port = port;
     }
@@ -118,6 +132,12 @@ public abstract class BaseEmbedServer implements EmbedServer {
 
     public void setConfig(Consumer<EmbedServer> config) {
         this.config = config;
+    }
+
+
+    @Override
+    public void setServerContextLoader(ClassLoader contextLoader) {
+        this.serverContextLoader = contextLoader;
     }
 
     /**
@@ -224,31 +244,6 @@ public abstract class BaseEmbedServer implements EmbedServer {
                 + baseName + "0 to " + baseName + (TEMP_DIR_ATTEMPTS - 1) + ')');
     }
 
-
-    protected ClassLoader createClassLoader(List<String> classpathFiles, ClassLoader loader) {
-        if (classpathFiles == null || classpathFiles.isEmpty()) return null;
-        return new URLClassLoader(toURLArray(classpathFiles), loader);
-    }
-
-    protected URL[] toURLArray(List<String> files) {
-        final List<URL> urls = new ArrayList<>();
-        if (files != null) for (String f : files) {
-            if (StringUtils.isBlank(f)) continue;
-            try {
-                URL u = null;
-
-                if (StringUtils.contains(f, ":")) u = new URL(f);
-                else u = new File(f).toURI().toURL();
-
-                urls.add(u);
-            } catch (Throwable e) {
-                LOG.log(Level.SEVERE, "解析文件URL发生错误", e);
-            }
-        }
-
-        return urls.toArray(new URL[urls.size()]);
-    }
-
     protected boolean checkEmbedServer() {
         if (this.getPort() < 1) {
             LOG.severe("检测环境失败：端口号 " + this.getPort() + " 无效");
@@ -280,31 +275,64 @@ public abstract class BaseEmbedServer implements EmbedServer {
 
     @Override
     public final void start(ClassLoader parentLoader, boolean daemon) throws RuntimeException {
+        this.start(parentLoader, daemon, false);
+    }
+
+    @Override
+    public Future<?> start(ClassLoader parentLoader, boolean daemon, boolean daemonThread) throws RuntimeException {
         if (!this.checkEmbedServer()) throw new IllegalArgumentException("EMBED SERVER 变量配置检测失败，请核对参数");
 
         try {
             this.optLock.lock();
             this.running.set(true);
 
-            Thread serverThread = new Thread(() -> {
-                if (isUseThreadContextLoader()) {
-                    ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
-
-                    ClassLoader cl = this.createClassLoader(this.getClassesdirs(), originalClassLoader);
-                    if (cl != null) Thread.currentThread().setContextClassLoader(cl);
-
-                    this.doServerInit(cl, this.config);
-                    this.doServerStart();
-                    Thread.currentThread().setContextClassLoader(originalClassLoader);
-                } else {
-                    this.doServerInit(Thread.currentThread().getContextClassLoader(), this.config);
-                    this.doServerStart();
+            if (this.currentFuture != null) {
+                try {
+                    this.doServerStop();
+                } catch (Throwable ignored) {
                 }
-            });
+                try {
+                    this.currentFuture.cancel(true);
+                } catch (Throwable ignored) {
+                }
+                this.currentFuture = null;
+            }
 
-            serverThread.run();
+            Runnable runner = () -> {
+                ClassLoader scloader = getServerContextLoader();
+                try {
+                    if (scloader != null) {
+                        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
+                        try {
+                            this.doServerInit(scloader, this.config);
+                            this.doServerStart();
+                        } finally {
+                            Thread.currentThread().setContextClassLoader(originalClassLoader);
+                        }
+                    } else {
+                        this.doServerInit(Thread.currentThread().getContextClassLoader(), this.config);
+                        this.doServerStart();
+                    }
+                } catch (Throwable e) {
+                    this.running.set(false);
+                    throw e;
+                }
+            };
 
-            if (!daemon) this.doServerWait();
+            if (daemonThread) {// 后台执行
+                this.currentFuture = this.executorService.submit(runner);
+                if (!daemon) {
+                    while (!this.running.get()) {
+                        try {
+                            Thread.sleep(2000);
+                        } catch (InterruptedException ignored) {
+                        }
+                    }
+                }
+            } else {
+                runner.run(); // 立即运行
+                if (!daemon) this.doServerWait();
+            }
         } catch (Throwable e) {
             this.running.set(false);
             throw new IllegalStateException(e);
@@ -313,8 +341,9 @@ public abstract class BaseEmbedServer implements EmbedServer {
                 this.optLock.unlock();
             } catch (Throwable ignored) {
             }
-            this.running.set(false);
+            if (!daemon) this.running.set(false);
         }
+        return null;
     }
 
     @Override
@@ -325,23 +354,22 @@ public abstract class BaseEmbedServer implements EmbedServer {
             LOG.log(Level.SEVERE, "停止服务错误", e);
         } finally {
             try {
+                if (this.currentFuture != null) this.currentFuture.cancel(true);
+            } catch (Throwable ignored) {
+            }
+
+            try {
+                this.executorService.shutdownNow();
+            } catch (Throwable ignored) {
+            }
+
+            try {
                 this.optLock.unlock();
             } catch (Throwable ignored) {
             }
             this.running.set(false);
         }
     }
-
-    /**
-     * 是否使用线程的 ContextLoader 配置 classpath
-     * <p>
-     * 如果此方法返回true 则使用线程 ContextLoader 配置classpath
-     * <p>
-     * 如果此方法返回false 则需服务器自行设置 classpath
-     *
-     * @return
-     */
-    protected abstract boolean isUseThreadContextLoader();
 
     protected abstract void doServerInit(ClassLoader loader, Consumer<EmbedServer> config) throws RuntimeException;
 
@@ -350,7 +378,6 @@ public abstract class BaseEmbedServer implements EmbedServer {
     protected abstract void doServerWait() throws RuntimeException;
 
     protected abstract void doServerStop() throws RuntimeException;
-
 
     protected static class LogListener implements LifeCycleListener {
         private final Logger logger;
@@ -389,6 +416,59 @@ public abstract class BaseEmbedServer implements EmbedServer {
             if (this.logger == null || server == null) return;
             this.logger.log(Level.INFO, server.getType() + " STOPPED");
         }
+    }
+
+
+    protected static ClassLoader createEmbedServerContextLoader(List<String> clps, ClassLoader originClassLoader) {
+        if (originClassLoader == null) originClassLoader = Thread.currentThread().getContextClassLoader();
+        if (clps == null || clps.isEmpty()) return originClassLoader;
+        else return new URLClassLoader(toURLArray(clps, false), originClassLoader);
+    }
+
+    public static URL[] toURLArray(List<String> files, boolean checkExists) {
+        final List<URL> urls = new ArrayList<>();
+
+        if (files != null) files.forEach(f -> {
+            URL u = toURL(f, checkExists);
+            if (u != null) urls.add(u);
+        });
+
+        return urls.toArray(new URL[urls.size()]);
+    }
+
+    public static URL toURL(String file, boolean checkExists) {
+        if (StringUtils.isBlank(file)) return null;
+
+        URL u = null;
+        try {
+            // TODO 判断形式需要考虑windows平台的文件表达式
+            if (StringUtils.startsWith(file, "/")) {
+                u = toFileURL(file, checkExists); // 以/开头强制为文件
+            } else if (StringUtils.contains(file, ":")) u = new URL(file);
+            else {
+                u = toFileURL(file, checkExists); // 以/开头强制为文件
+            }
+        } catch (Throwable e) {
+            LOG.log(Level.SEVERE, "解析文件URL发生错误 " + file, e);
+        }
+
+        return u;
+    }
+
+    private static URL toFileURL(String file, boolean checkExists) {
+        try {
+            Path u = Paths.get(file);
+            if (u == null) return null;
+
+            if (checkExists) {
+                File f = u.toFile();
+                if (f.exists()) return u.toUri().toURL();
+            } else return u.toUri().toURL();
+
+        } catch (Throwable e) {
+            LOG.log(Level.SEVERE, "解析文件URL发生错误 " + file, e);
+        }
+        return null;
     }
 
     @Override

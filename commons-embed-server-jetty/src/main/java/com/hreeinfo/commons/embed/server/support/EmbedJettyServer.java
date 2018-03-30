@@ -2,6 +2,7 @@ package com.hreeinfo.commons.embed.server.support;
 
 import com.hreeinfo.commons.embed.server.BaseEmbedServer;
 import com.hreeinfo.commons.embed.server.EmbedServer;
+import com.hreeinfo.commons.embed.server.internal.InternalFactory;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.jetty.annotations.AnnotationConfiguration;
 import org.eclipse.jetty.plus.webapp.EnvConfiguration;
@@ -32,11 +33,6 @@ public class EmbedJettyServer extends BaseEmbedServer {
     private static final Logger LOG = Logger.getLogger(EmbedJettyServer.class.getName());
 
     public static final String TYPE_NAME = "JETTY";
-
-    /**
-     * 值为true时，使用jetty内置的classpath来配置classpathdirs，而不是使用当前线程的类路径
-     */
-    public static final String OPTION_CLASSPATH_JETTY = "jetty_classpaths";
 
     /**
      * 重写jetty所需的 configurations 每个configuration为完整类名，多个值之间用,分隔
@@ -148,7 +144,8 @@ public class EmbedJettyServer extends BaseEmbedServer {
     }
 
     /**
-     * TODO 需要实现configfile机制
+     * TODO 需要实现configfile机制 按目录扫描 jetty-config.xml 类似于 findTomcatConfigFile 的逻辑
+     *
      * @param initHandler
      * @param loader
      * @throws Exception
@@ -169,17 +166,16 @@ public class EmbedJettyServer extends BaseEmbedServer {
                 allrs.add(Resource.newResource(r));
             }
 
-            ResourceCollection baseRCS = new ResourceCollection(allrs.toArray(new Resource[allrs.size()]));
+            ResourceCollection baseRCS = new ResourceCollection(allrs.toArray(new Resource[]{}));
 
             initHandler.setBaseResource(baseRCS);
         }
 
         initHandler.setParentLoaderPriority(true);
-        List<String> allECPs = new ArrayList<>();
 
-        // TODO 需要统一 classpath webapp resource  载入顺序
 
-        if (!this.isUseThreadContextLoader()) allECPs.addAll(this.getClassesdirs()); // 此时使用jetty内置的classpath解析机制
+        // 使用jetty内置的classpath解析机制
+        final List<String> allECPs = new ArrayList<>(this.getClassesdirs());
 
         File webappFile = new File(this.getWebapp());
         if (webappFile.exists()) {
@@ -239,24 +235,20 @@ public class EmbedJettyServer extends BaseEmbedServer {
         });
     }
 
-    @Override
-    protected boolean isUseThreadContextLoader() {
-        return !this.optionBoolean(OPTION_CLASSPATH_JETTY);
-    }
-
     @SuppressWarnings("unchecked")
     @Override
     protected void doServerInit(ClassLoader loader, Consumer<EmbedServer> config) throws RuntimeException {
-        if (this.server == null) {
-            Server initServer = new Server((this.getPort() <= 0) ? 8080 : this.getPort());
+        final int serverPort = (this.getPort() <= 0) ? 8080 : this.getPort();
+        this.server = InternalFactory.inst().get("jetty_server_" + serverPort, Server.class,
+                () -> new Server((this.getPort() <= 0) ? 8080 : this.getPort()));
+
+        this.handler = InternalFactory.inst().get("jetty_instance_" + serverPort + "_" + this.getContext(), WebAppContext.class, () -> {
             WebAppContext initHandler = new WebAppContext();
+            this.initServerHandler(this.server, initHandler, loader);
+            return initHandler;
+        });
 
-            this.initServerHandler(initServer, initHandler, loader);
-
-            this.server = initServer;
-            this.handler = initHandler;
-            if (config != null) config.accept(this);
-        }
+        if (config != null) config.accept(this);
     }
 
     @Override
@@ -287,6 +279,13 @@ public class EmbedJettyServer extends BaseEmbedServer {
             this.server.stop();
         } catch (Exception e) {
             throw new IllegalStateException("停止服务发生错误", e);
+        } finally {
+            try {
+                this.server.destroy();
+            } catch (Throwable ignored) {
+
+            }
+            this.server = null;
         }
     }
 }

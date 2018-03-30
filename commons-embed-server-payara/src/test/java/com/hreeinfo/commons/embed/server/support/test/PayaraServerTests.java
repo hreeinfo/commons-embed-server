@@ -10,7 +10,7 @@ import com.hreeinfo.commons.embed.server.support.EmbedPayaraServer;
  */
 public class PayaraServerTests {
     public static void main(String[] args) {
-        EmbedServer server = EmbedServer.builder()
+        EmbedServer server = EmbedServer.Builder.builder()
                 .port(8080).context("/aa").loglevel("INFO")
                 .webapp("commons-embed-server-payara/src/test/web")
                 .build(EmbedPayaraServer.class, e -> System.out.println(e.getClass() + " 配置完成"));

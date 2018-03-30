@@ -2,7 +2,6 @@ package com.hreeinfo.commons.embed.server.support.test;
 
 import com.hreeinfo.commons.embed.server.EmbedServer;
 import com.hreeinfo.commons.embed.server.support.EmbedTomcatServer;
-import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
 import java.util.Arrays;
@@ -16,7 +15,7 @@ import java.util.List;
  */
 public class TomcatServerTests {
     private static List<String> getTestClassPaths() {
-        String[] acps = StringUtils.split(System.getProperty("java.class.path"), ":");
+        String[] acps = {System.getProperty("user.dir") + "/commons-embed-server-tomcat/src/test/java"};
         return Arrays.asList(acps);
     }
 
@@ -51,7 +50,7 @@ public class TomcatServerTests {
     public static void main(String[] args) {
         List<String> cps = getTestClassPaths();
 
-        EmbedServer server = EmbedServer.builder()
+        EmbedServer server = EmbedServer.Builder.builder()
                 .port(8080).context("/aa").loglevel("INFO")
                 .webapp(getTestWebappPath())
                 .classesdir(cps.toArray(new String[cps.size()]))
