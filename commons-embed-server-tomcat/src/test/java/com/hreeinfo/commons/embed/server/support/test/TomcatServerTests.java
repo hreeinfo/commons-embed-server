@@ -1,8 +1,7 @@
 package com.hreeinfo.commons.embed.server.support.test;
 
-import com.hreeinfo.commons.embed.server.ServerRunnerOpt;
-import com.hreeinfo.commons.embed.server.support.TomcatServerRunner;
-import org.apache.commons.lang3.StringUtils;
+import com.hreeinfo.commons.embed.server.EmbedServer;
+import com.hreeinfo.commons.embed.server.support.EmbedTomcatServer;
 
 import java.io.File;
 import java.util.Arrays;
@@ -16,7 +15,7 @@ import java.util.List;
  */
 public class TomcatServerTests {
     private static List<String> getTestClassPaths() {
-        String[] acps = StringUtils.split(System.getProperty("java.class.path"), ":");
+        String[] acps = {System.getProperty("user.dir") + "/commons-embed-server-tomcat/src/test/java"};
         return Arrays.asList(acps);
     }
 
@@ -49,23 +48,15 @@ public class TomcatServerTests {
     }
 
     public static void main(String[] args) {
-        ServerRunnerOpt opt = new ServerRunnerOpt();
-        opt.context("/").port(8080)
-                .webappdir(getTestWebappPath())
-                .classesdir()
-                .resourcesdir(getTestResourcePath() + "/addtion")
-                .option("cacheSize", "100000");
+        List<String> cps = getTestClassPaths();
 
+        EmbedServer server = EmbedServer.Builder.builder()
+                .port(8080).context("/aa").loglevel("INFO")
+                .webapp(getTestWebappPath())
+                .classesdir(cps.toArray(new String[cps.size()]))
+                .resourcedir(getTestResourcePath())
+                .build(EmbedTomcatServer.class, e -> System.out.println(e.getClass() + " 配置完成"));
 
-        final TomcatServerRunner runner = new TomcatServerRunner(opt);
-
-
-        try {
-            runner.start();
-        } catch (Throwable e) {
-            e.printStackTrace();
-        } finally {
-            runner.stop();
-        }
+        server.start();
     }
 }

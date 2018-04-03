@@ -75,6 +75,19 @@ configure(allprojects) {
 
             version {
                 vcsTag = "v$project.version"
+                gpg {
+                    sign = true
+                    passphrase = project.hasProperty('gpgPassphrase') ? project.getProperty('gpgPassphrase') : null
+                }
+
+                /* 当前版本通过 bintray 手工同步 后续自动构建开启
+                mavenCentralSync {
+                    sync = true
+                    user = project.hasProperty('mavenCentralUserToken') ? project.getProperty('mavenCentralUserToken') : null
+                    password = project.hasProperty('mavenCentralPassword') ? project.getProperty('mavenCentralPassword') : null
+                    close = '1'
+                }
+                 */
             }
         }
     }
