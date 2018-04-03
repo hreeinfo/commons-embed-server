@@ -3,6 +3,7 @@ package com.hreeinfo.commons.embed.server.support;
 import com.hreeinfo.commons.embed.server.BaseEmbedServer;
 import com.hreeinfo.commons.embed.server.EmbedServer;
 import com.hreeinfo.commons.embed.server.internal.InternalFactory;
+import com.hreeinfo.commons.embed.server.internal.InternalOptParsers;
 import org.apache.catalina.Context;
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.WebResourceRoot;
@@ -23,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.logging.Level;
@@ -118,7 +120,7 @@ public class EmbedTomcatServer extends BaseEmbedServer {
     }
 
     @Override
-    protected void doServerWait() throws RuntimeException {
+    protected void doServerWait(Supplier<Boolean> waitWhen) throws RuntimeException {
         if (this.tomcatServer == null) throw new IllegalStateException("Tomcat Server 未初始化");
         try {
             this.tomcatServer.getServer().await();
@@ -500,5 +502,66 @@ public class EmbedTomcatServer extends BaseEmbedServer {
             } catch (Throwable ignored) {
             }
         }
+    }
+
+
+    public static void main(String[] args) {
+        if (args == null || args.length < 1) throw new IllegalArgumentException("参数配置错误");
+
+        Builder builder = Builder.builder();
+        builder.opts(
+                optionParser -> {
+                    // 识别jetty参数
+                    optionParser.accepts(OPTION_PROTOCOL).withOptionalArg();
+                    optionParser.accepts(OPTION_URI_ENCODING).withOptionalArg();
+                    optionParser.accepts(OPTION_RELOADABLE).withOptionalArg();
+                    optionParser.accepts(OPTION_CACHE_SIZE).withOptionalArg();
+                    optionParser.accepts(OPTION_DEFAULT_WEB_XML).withOptionalArg();
+                    optionParser.accepts(OPTION_SCAN_CLASSES_DIR).withOptionalArg();
+                    optionParser.accepts(OPTION_USERS).withOptionalArg();
+                }, optionSet -> {
+                    // 处理jetty参数
+                    String oPROTOCOL = InternalOptParsers.optString(optionSet, OPTION_PROTOCOL, "");
+                    if (StringUtils.isNotBlank(oPROTOCOL)) builder.option(OPTION_PROTOCOL, oPROTOCOL);
+
+                    String oURI_ENCODING = InternalOptParsers.optString(optionSet, OPTION_URI_ENCODING, "");
+                    if (StringUtils.isNotBlank(oURI_ENCODING)) builder.option(OPTION_URI_ENCODING, oURI_ENCODING);
+
+                    String oRELOADABLE = InternalOptParsers.optString(optionSet, OPTION_RELOADABLE, "");
+                    if (StringUtils.isNotBlank(oRELOADABLE)) builder.option(OPTION_RELOADABLE, oRELOADABLE);
+
+                    String oCACHE_SIZE = InternalOptParsers.optString(optionSet, OPTION_CACHE_SIZE, "");
+                    if (StringUtils.isNotBlank(oCACHE_SIZE)) builder.option(OPTION_CACHE_SIZE, oCACHE_SIZE);
+
+                    String oDWEB_XML = InternalOptParsers.optString(optionSet, OPTION_DEFAULT_WEB_XML, "");
+                    if (StringUtils.isNotBlank(oDWEB_XML)) builder.option(OPTION_DEFAULT_WEB_XML, oDWEB_XML);
+
+                    List<String> oSC_DIR = InternalOptParsers.optString(optionSet, OPTION_SCAN_CLASSES_DIR);
+                    if (oSC_DIR != null) oSC_DIR.forEach(s -> builder.option(OPTION_SCAN_CLASSES_DIR, s));
+
+                    List<String> oUSERS = InternalOptParsers.optString(optionSet, OPTION_USERS);
+                    if (oUSERS != null) oUSERS.forEach(s -> builder.option(OPTION_USERS, s));
+
+                },
+                args);
+
+        EmbedTomcatServer es = builder.build(EmbedTomcatServer.class, server -> {
+            LOG.info("EmbedTomcatServer 已载入");
+            // 增加其他初始化配置
+        });
+
+        if (es == null) throw new IllegalStateException("无法载入 EmbedTomcatServer");
+
+        boolean failed = false;
+        try {
+            es.start(Thread.currentThread().getContextClassLoader(), false, false);
+        } catch (Throwable e) {
+            LOG.log(Level.SEVERE, "EmbedTomcatServer 运行错误" + e.getMessage(), e);
+            failed = true;
+        } finally {
+            es.stop();
+        }
+
+        System.exit(failed ? 2 : 0);
     }
 }

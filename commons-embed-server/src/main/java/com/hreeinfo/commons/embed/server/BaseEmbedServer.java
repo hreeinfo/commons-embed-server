@@ -1,5 +1,6 @@
 package com.hreeinfo.commons.embed.server;
 
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
@@ -18,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -40,6 +42,7 @@ public abstract class BaseEmbedServer implements EmbedServer {
     private String webapp = "";
     private boolean war;
     private String workingdir = "";
+    private String lockfile = "";
     private final List<String> classesdirs = new ArrayList<>();
     private final List<String> resourcesdirs = new ArrayList<>();
     private String configfile = "";
@@ -86,6 +89,10 @@ public abstract class BaseEmbedServer implements EmbedServer {
         return loglevel;
     }
 
+    public String getLockfile() {
+        return lockfile;
+    }
+
     public Map<String, String> getOptions() {
         return options;
     }
@@ -128,6 +135,10 @@ public abstract class BaseEmbedServer implements EmbedServer {
 
     public void setWorkingdir(String workingdir) {
         this.workingdir = workingdir;
+    }
+
+    public void setLockfile(String lockfile) {
+        this.lockfile = lockfile;
     }
 
     public void setConfig(Consumer<EmbedServer> config) {
@@ -258,6 +269,35 @@ public abstract class BaseEmbedServer implements EmbedServer {
         return true;
     }
 
+    protected void ensureLockfile() {
+        if (StringUtils.isBlank(this.lockfile)) return;  // 未设置总是认为有效
+
+        try {
+            FileUtils.touch(new File(this.lockfile));
+        } catch (Throwable e) {
+            LOG.warning("文件 " + this.lockfile + " 无法操作 - " + e.getMessage());
+        }
+    }
+
+    protected void deleteLockfile() {
+        if (StringUtils.isBlank(this.lockfile)) return;  // 未设置总是认为有效
+
+        try {
+            FileUtils.forceDelete(new File(this.lockfile));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    protected boolean validLockfile() {
+        if (StringUtils.isBlank(this.lockfile)) return true;  // 未设置总是认为有效
+        try {
+            return new File(this.lockfile).exists();
+        } catch (Throwable ignored) {
+        }
+
+        return false;
+    }
+
     @Override
     public boolean isRunning() {
         return this.running.get();
@@ -285,6 +325,8 @@ public abstract class BaseEmbedServer implements EmbedServer {
         try {
             this.optLock.lock();
             this.running.set(true);
+
+            this.ensureLockfile();
 
             if (this.currentFuture != null) {
                 try {
@@ -321,29 +363,46 @@ public abstract class BaseEmbedServer implements EmbedServer {
 
             if (daemonThread) {// 后台执行
                 this.currentFuture = this.executorService.submit(runner);
-                if (!daemon) {
-                    while (!this.running.get()) {
-                        try {
-                            Thread.sleep(2000);
-                        } catch (InterruptedException ignored) {
-                        }
-                    }
-                }
+                if (!daemon) this.waitForDaemonThread();
             } else {
                 runner.run(); // 立即运行
-                if (!daemon) this.doServerWait();
+                if (!daemon) this.waitForMainThread();
             }
+
         } catch (Throwable e) {
             this.running.set(false);
             throw new IllegalStateException(e);
         } finally {
+            if (!daemon) this.running.set(false);
             try {
                 this.optLock.unlock();
             } catch (Throwable ignored) {
             }
-            if (!daemon) this.running.set(false);
         }
-        return null;
+        return this.currentFuture;
+    }
+
+    private void waitForDaemonThread() {
+        while (this.running.get()) {
+            try {
+                if (StringUtils.isNotBlank(this.lockfile) && !this.validLockfile()) break;
+                Thread.sleep(2000);
+            } catch (InterruptedException ignored) {
+            }
+        }
+    }
+
+    // TODO 当前判断：仅在已设置 lockfile 时，进行手工锁定而不是服务器的锁定
+    private void waitForMainThread() {
+        if (StringUtils.isNotBlank(this.lockfile)) {
+            while (this.running.get()) {
+                try {
+                    if (!this.validLockfile()) break;
+                    Thread.sleep(2000);
+                } catch (InterruptedException ignored) {
+                }
+            }
+        } else this.doServerWait(this::validLockfile);
     }
 
     @Override
@@ -353,6 +412,7 @@ public abstract class BaseEmbedServer implements EmbedServer {
         } catch (Throwable e) {
             LOG.log(Level.SEVERE, "停止服务错误", e);
         } finally {
+            this.deleteLockfile();
             try {
                 if (this.currentFuture != null) this.currentFuture.cancel(true);
             } catch (Throwable ignored) {
@@ -375,7 +435,8 @@ public abstract class BaseEmbedServer implements EmbedServer {
 
     protected abstract void doServerStart() throws RuntimeException;
 
-    protected abstract void doServerWait() throws RuntimeException;
+    // TODO 各个实现中 无法按需要进行 wait 需要实现 waitWhen=false 时跳出的逻辑
+    protected abstract void doServerWait(Supplier<Boolean> waitWhen) throws RuntimeException;
 
     protected abstract void doServerStop() throws RuntimeException;
 

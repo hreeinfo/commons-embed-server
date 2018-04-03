@@ -6,7 +6,10 @@ import joptsimple.OptionSet;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * <p>创建作者：xingxiuyi </p>
@@ -58,6 +61,54 @@ public final class InternalOptParsers {
         return list;
     }
 
+    public static final void opt(OptionSet osts, String name, Consumer<Object> consumer) {
+        if (osts == null || consumer == null || name == null) return;
+        if (osts.has(name)) {
+            List<?> objects = osts.valuesOf(name);
+            if (objects != null) for (Object o : objects) {
+                consumer.accept(o);
+            }
+        }
+    }
+
+    public static void optAppendPathValues(Object o, List<String> dirs) {
+        if (dirs == null || o == null) return;
+
+        String s = o.toString();
+
+        if (StringUtils.isBlank(s)) return;
+        else if (StringUtils.contains(s, ":")) {
+            String[] sp = StringUtils.split(s, ":");
+            if (sp != null) for (String p : sp) {
+                if (StringUtils.isBlank(p)) continue;
+                dirs.add(StringUtils.trim(p));
+            }
+        } else dirs.add(StringUtils.trim(s));
+    }
+
+    public static void optAppendMaValues(Object o, Map<String, String> opts) {
+        if (opts == null || o == null) return;
+
+        String s = o.toString();
+
+        if (StringUtils.isNotBlank(s) && StringUtils.contains(s, ":")) {
+            List<String> pslist = new ArrayList<>();
+            if (StringUtils.contains(s, ",")) {
+                String[] psp = StringUtils.split(s, ",");
+                if (psp != null) pslist.addAll(Arrays.asList(psp));
+            } else pslist.add(s);
+
+            for (String ps : pslist) {
+                String[] sp = StringUtils.split(ps, ":");
+
+                if (sp.length > 0 && StringUtils.isNotBlank(sp[0])) {
+                    String k = StringUtils.trim(sp[0]);
+                    if (sp.length > 1) opts.put(k, StringUtils.trim(sp[1]));
+                    else opts.put(k, null);
+                }
+            }
+        }
+    }
 
     public String toParams(EmbedServer es) {
         StringBuilder sb = new StringBuilder();

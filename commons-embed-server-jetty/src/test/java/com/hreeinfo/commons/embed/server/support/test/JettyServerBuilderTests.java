@@ -13,13 +13,13 @@ import java.util.List;
  * <p>创建日期：2018/2/24 </p>
  * <p>版权所属：xingxiuyi </p>
  */
-public class JettyServerTests {
-    private static List<String> getTestClassPaths() {
+public class JettyServerBuilderTests {
+    static List<String> getTestClassPaths() {
         String[] acps = StringUtils.split(System.getProperty("java.class.path"), ":");
         return Arrays.asList(acps);
     }
 
-    private static String getTestResourcePath() {
+    static String getTestResourcePath() {
         try {
             String path = System.getProperty("user.dir") + "/commons-embed-server-jetty/src/test/resources";
             if (new File(path).exists()) return path;
@@ -33,7 +33,7 @@ public class JettyServerTests {
         throw new IllegalArgumentException("未找到项目 resources 目录");
     }
 
-    private static String getTestWebappPath() {
+    static String getTestWebappPath() {
         try {
             String path = System.getProperty("user.dir") + "/commons-embed-server-jetty/src/test/web";
             if (new File(path).exists()) return path;

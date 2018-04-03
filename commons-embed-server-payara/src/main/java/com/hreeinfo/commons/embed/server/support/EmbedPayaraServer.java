@@ -3,11 +3,15 @@ package com.hreeinfo.commons.embed.server.support;
 import com.hreeinfo.commons.embed.server.BaseEmbedServer;
 import com.hreeinfo.commons.embed.server.EmbedServer;
 import com.hreeinfo.commons.embed.server.internal.InternalFactory;
+import com.hreeinfo.commons.embed.server.internal.InternalOptParsers;
 import fish.payara.micro.PayaraMicro;
 import fish.payara.micro.PayaraMicroRuntime;
+import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -79,7 +83,7 @@ public class EmbedPayaraServer extends BaseEmbedServer {
     }
 
     @Override
-    protected void doServerWait() throws RuntimeException {
+    protected void doServerWait(Supplier<Boolean> waitWhen) throws RuntimeException {
         try {
             this.stopAwait = false;
             this.awaitThread = Thread.currentThread();
@@ -116,5 +120,38 @@ public class EmbedPayaraServer extends BaseEmbedServer {
         }
 
         if (this.getListeners() != null) this.getListeners().forEach(e -> e.onStopped(this));
+    }
+
+
+    public static void main(String[] args) {
+        if (args == null || args.length < 1) throw new IllegalArgumentException("参数配置错误");
+
+        Builder builder = Builder.builder();
+        builder.opts(
+                optionParser -> {
+                    // 识别额外参数参数
+                }, optionSet -> {
+                    // 处理识别额外参数参数
+                },
+                args);
+
+        EmbedPayaraServer es = builder.build(EmbedPayaraServer.class, server -> {
+            LOG.info("EmbedJettyServer 已载入");
+            // 增加其他初始化配置
+        });
+
+        if (es == null) throw new IllegalStateException("无法载入 EmbedPayaraServer");
+
+        boolean failed = false;
+        try {
+            es.start(Thread.currentThread().getContextClassLoader(), false, false);
+        } catch (Throwable e) {
+            LOG.log(Level.SEVERE, "EmbedPayaraServer 运行错误" + e.getMessage(), e);
+            failed = true;
+        } finally {
+            es.stop();
+        }
+
+        System.exit(failed ? 2 : 0);
     }
 }

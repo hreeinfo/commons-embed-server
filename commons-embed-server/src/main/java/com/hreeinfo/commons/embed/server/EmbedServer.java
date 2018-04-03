@@ -1,11 +1,13 @@
 package com.hreeinfo.commons.embed.server;
 
-import com.hreeinfo.commons.embed.server.internal.InternalNullServer;
 import com.hreeinfo.commons.embed.server.internal.InternalLifeCycleListener;
+import com.hreeinfo.commons.embed.server.internal.InternalNullServer;
 import com.hreeinfo.commons.embed.server.internal.InternalOptParsers;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.builder.ToStringBuilder;
+import org.apache.commons.lang3.builder.ToStringStyle;
 
 import java.io.File;
 import java.util.*;
@@ -71,6 +73,7 @@ public interface EmbedServer {
         private String webapp = "";
         private int war = 0;
         private String workingdir = "";
+        private String lockfile = "";
         private final List<String> classesdirs = new ArrayList<>();
         private final List<String> resourcesdirs = new ArrayList<>();
         private String configfile = "";
@@ -115,6 +118,11 @@ public interface EmbedServer {
 
         public Builder configfile(String configfile) {
             this.configfile = configfile;
+            return this;
+        }
+
+        public Builder lockfile(String lockfile) {
+            this.lockfile = lockfile;
             return this;
         }
 
@@ -167,6 +175,7 @@ public interface EmbedServer {
             embedServer.setWebapp(this.webapp);
             embedServer.setWar(this.detectWAR());
             embedServer.setWorkingdir(this.workingdir);
+            embedServer.setLockfile(this.lockfile);
             embedServer.setConfigfile(this.configfile);
             embedServer.setLoglevel(this.loglevel);
             embedServer.getClassesdirs().addAll(this.classesdirs);
@@ -274,23 +283,34 @@ public interface EmbedServer {
             return fes;
         }
 
+        public Builder opts(String[] args) {
+            return opts(null, null, args);
+        }
 
         /**
          * 根据命令行参数构建配置对象
          *
+         * @param parserConsumer
+         * @param optionSetConsumer
          * @param args
          * @return
          */
-        public Builder opts(String[] args) {
+        public Builder opts(Consumer<OptionParser> parserConsumer, Consumer<OptionSet> optionSetConsumer, String[] args) {
             OptionParser parser = new OptionParser();
             parser.accepts("port").withOptionalArg().ofType(Integer.class);
             parser.accepts("context").withOptionalArg();
             parser.accepts("webapp").withOptionalArg();
+            parser.accepts("workingdir").withOptionalArg();
+            parser.accepts("lockfile").withOptionalArg();
             parser.accepts("classesdir").withOptionalArg();
             parser.accepts("resourcesdir").withOptionalArg();
             parser.accepts("configfile").withOptionalArg();
             parser.accepts("loglevel").withOptionalArg();
-            parser.accepts("serverClasspaths").withOptionalArg();
+            parser.accepts("classpath").withOptionalArg();
+            parser.accepts("serverClasspath").withOptionalArg();
+            parser.accepts("option").withOptionalArg();
+
+            if (parserConsumer != null) parserConsumer.accept(parser);
 
             OptionSet osts = parser.parse((args != null) ? args : new String[]{});
             if (osts == null) return this;
@@ -298,19 +318,46 @@ public interface EmbedServer {
             this.port = InternalOptParsers.optInteger(osts, "port", 8080);
             this.context = InternalOptParsers.optString(osts, "context", "");
             this.webapp = InternalOptParsers.optString(osts, "webapp", "");
-            this.classesdirs.addAll(InternalOptParsers.optString(osts, "classesdir"));
-            this.resourcesdirs.addAll(InternalOptParsers.optString(osts, "resourcesdir"));
+            this.workingdir = InternalOptParsers.optString(osts, "workingdir", "");
+            this.lockfile = InternalOptParsers.optString(osts, "lockfile", "");
+            InternalOptParsers.opt(osts, "classesdir", o -> InternalOptParsers.optAppendPathValues(o, this.classesdirs));
+            InternalOptParsers.opt(osts, "resourcesdir", o -> InternalOptParsers.optAppendPathValues(o, this.resourcesdirs));
             this.configfile = InternalOptParsers.optString(osts, "configfile", "");
             this.loglevel = StringUtils.upperCase(InternalOptParsers.optString(osts, "loglevel", "INFO"));
-            this.serverClasspaths.addAll(InternalOptParsers.optString(osts, "serverClasspaths"));
+            InternalOptParsers.opt(osts, "classpath", o -> InternalOptParsers.optAppendPathValues(o, this.serverClasspaths));
+            InternalOptParsers.opt(osts, "serverClasspath", o -> InternalOptParsers.optAppendPathValues(o, this.serverClasspaths));
 
-            // TODO 其余的配置参数 作为 options 加入
-            // TODO 此时无法配置 runtime server classpath 需要修正
+            InternalOptParsers.opt(osts, "option", o -> InternalOptParsers.optAppendMaValues(o, this.options));
+
+            if (optionSetConsumer != null) optionSetConsumer.accept(osts);
+
             return this;
         }
 
+
         public static Builder builder() {
             return new Builder();
+        }
+
+        @Override
+        public String toString() {
+            return new ToStringBuilder(this, ToStringStyle.MULTI_LINE_STYLE)
+                    .append("port", port)
+                    .append("context", context)
+                    .append("webapp", webapp)
+                    .append("war", war)
+                    .append("workingdir", workingdir)
+                    .append("lockfile", lockfile)
+                    .append("classesdirs", classesdirs)
+                    .append("resourcesdirs", resourcesdirs)
+                    .append("configfile", configfile)
+                    .append("loglevel", loglevel)
+                    .append("options", options)
+                    .append("listeners", listeners)
+                    .append("config", config)
+                    .append("serverClasspaths", serverClasspaths)
+                    .append("innerListener", innerListener)
+                    .toString();
         }
     }
 
