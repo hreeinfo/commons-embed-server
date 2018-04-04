@@ -294,26 +294,36 @@ public class EmbedTomcatServer extends BaseEmbedServer {
     /**
      * 当项目不存在 WEB-INF/classes 时，扫描目标的jar
      *
+     * TODO 此行为未进行验证
+     *
      * @param initContext
      */
+    @SuppressWarnings("PointlessNullCheck")
     private void setupClassesJarScanning(Context initContext) {
         JarScanner jsc = initContext.getJarScanner();
-        if (jsc != null && (jsc instanceof StandardJarScanner))
+        if ((jsc != null) && (jsc instanceof StandardJarScanner)) {
             ((StandardJarScanner) jsc).setScanAllDirectories(true);
+        }
+
 
         String wcpd = this.option(OPTION_SCAN_CLASSES_DIR);
         if (StringUtils.isNotBlank(wcpd)) {
-            try {
-                File cf = new File(wcpd);
-                if (cf.exists() && cf.isDirectory() && cf.canWrite()) {
-                    File metaInfDir = new File(cf, "META-INF");
-                    if (!metaInfDir.exists()) {
-                        boolean success = metaInfDir.mkdir();
-                        if (!success) LOG.warning("无法创建 " + wcpd + "/META-INF ");
+            String[] wcps = StringUtils.split(wcpd, ";");
+            if (wcps != null) for (String wc : wcps) {
+                try {
+                    if (StringUtils.isBlank(wc)) continue;
+
+                    File cf = new File(wc);
+                    if (cf.exists() && cf.isDirectory() && cf.canWrite()) {
+                        File metaInfDir = new File(cf, "META-INF");
+                        if (!metaInfDir.exists()) {
+                            boolean success = metaInfDir.mkdir();
+                            if (!success) LOG.warning("无法创建 " + wc + "/META-INF ");
+                        }
                     }
+                } catch (Throwable e) {
+                    LOG.warning("处理目录 " + wc + " 出错");
                 }
-            } catch (Throwable e) {
-                LOG.warning("处理目录 " + wcpd + " 出错");
             }
         }
     }
