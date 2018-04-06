@@ -32,8 +32,10 @@ public abstract class BaseEmbedServer implements EmbedServer {
     private static final Logger LOG = Logger.getLogger(BaseEmbedServer.class.getName());
     private static final int TEMP_DIR_ATTEMPTS = 10000;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private final ExecutorService executorReloadLockService = Executors.newSingleThreadExecutor();
     private final AtomicBoolean running = new AtomicBoolean(Boolean.FALSE);
     private final Lock optLock = new ReentrantLock();
+    private final Lock reloadLock = new ReentrantLock();
 
     private volatile Future<?> currentFuture;
 
@@ -43,6 +45,7 @@ public abstract class BaseEmbedServer implements EmbedServer {
     private boolean war;
     private String workingdir = "";
     private String lockfile = "";
+    private String reloadLockfile = "";
     private final List<String> classesdirs = new ArrayList<>();
     private final List<String> resourcesdirs = new ArrayList<>();
     private String configfile = "";
@@ -93,6 +96,10 @@ public abstract class BaseEmbedServer implements EmbedServer {
         return lockfile;
     }
 
+    public String getReloadLockfile() {
+        return reloadLockfile;
+    }
+
     public Map<String, String> getOptions() {
         return options;
     }
@@ -139,6 +146,10 @@ public abstract class BaseEmbedServer implements EmbedServer {
 
     public void setLockfile(String lockfile) {
         this.lockfile = lockfile;
+    }
+
+    public void setReloadLockfile(String reloadLockfile) {
+        this.reloadLockfile = reloadLockfile;
     }
 
     public void setConfig(Consumer<EmbedServer> config) {
@@ -250,9 +261,7 @@ public abstract class BaseEmbedServer implements EmbedServer {
                 return tempDir;
             }
         }
-        throw new IllegalStateException("Failed to create directory within "
-                + TEMP_DIR_ATTEMPTS + " attempts (tried "
-                + baseName + "0 to " + baseName + (TEMP_DIR_ATTEMPTS - 1) + ')');
+        throw new IllegalStateException("创建临时目录失败");
     }
 
     protected boolean checkEmbedServer() {
@@ -298,6 +307,35 @@ public abstract class BaseEmbedServer implements EmbedServer {
         return false;
     }
 
+    protected void ensureReloadLockfile() {
+        if (StringUtils.isBlank(this.reloadLockfile)) return;  // 未设置总是认为有效
+
+        try {
+            FileUtils.touch(new File(this.reloadLockfile));
+        } catch (Throwable e) {
+            LOG.warning("文件 " + this.reloadLockfile + " 无法操作 - " + e.getMessage());
+        }
+    }
+
+    protected void deleteReloadLockfile() {
+        if (StringUtils.isBlank(this.reloadLockfile)) return;  // 未设置总是认为有效
+
+        try {
+            FileUtils.forceDelete(new File(this.reloadLockfile));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    protected boolean validReloadLockfile() {
+        if (StringUtils.isBlank(this.reloadLockfile)) return true;  // 未设置总是认为有效
+        try {
+            return new File(this.reloadLockfile).exists();
+        } catch (Throwable ignored) {
+        }
+
+        return false;
+    }
+
     @Override
     public boolean isRunning() {
         return this.running.get();
@@ -327,6 +365,7 @@ public abstract class BaseEmbedServer implements EmbedServer {
             this.running.set(true);
 
             this.ensureLockfile();
+            this.ensureReloadLockfile();
 
             if (this.currentFuture != null) {
                 try {
@@ -360,6 +399,17 @@ public abstract class BaseEmbedServer implements EmbedServer {
                     throw e;
                 }
             };
+            if (StringUtils.isNotBlank(this.getReloadLockfile())) {
+                this.executorReloadLockService.submit(() -> {
+                    while (this.running.get()) {
+                        try {
+                            if (!this.validReloadLockfile()) this.reload();
+                            Thread.sleep(1000);
+                        } catch (InterruptedException ignored) {
+                        }
+                    }
+                });
+            }
 
             if (daemonThread) {// 后台执行
                 this.currentFuture = this.executorService.submit(runner);
@@ -398,11 +448,30 @@ public abstract class BaseEmbedServer implements EmbedServer {
             while (this.running.get()) {
                 try {
                     if (!this.validLockfile()) break;
-                    Thread.sleep(2000);
+                    Thread.sleep(1000);
                 } catch (InterruptedException ignored) {
                 }
             }
         } else this.doServerWait(this::validLockfile);
+    }
+
+    @Override
+    public void reload() {
+        try {
+            this.reloadLock.lock();
+
+            // 强制创建 reload lock file
+            this.ensureReloadLockfile();
+
+            // 执行目标服务器的context reload 动作
+            this.doServerReload();
+        } catch (Throwable e) {
+            LOG.severe("无法重载context - " + e.getMessage());
+            try {
+                this.reloadLock.unlock();
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     @Override
@@ -413,6 +482,7 @@ public abstract class BaseEmbedServer implements EmbedServer {
             LOG.log(Level.SEVERE, "停止服务错误", e);
         } finally {
             this.deleteLockfile();
+            this.deleteReloadLockfile();
             try {
                 if (this.currentFuture != null) this.currentFuture.cancel(true);
             } catch (Throwable ignored) {
@@ -420,6 +490,11 @@ public abstract class BaseEmbedServer implements EmbedServer {
 
             try {
                 this.executorService.shutdownNow();
+            } catch (Throwable ignored) {
+            }
+
+            try {
+                this.executorReloadLockService.shutdownNow();
             } catch (Throwable ignored) {
             }
 
@@ -437,6 +512,8 @@ public abstract class BaseEmbedServer implements EmbedServer {
 
     // TODO 各个实现中 无法按需要进行 wait 需要实现 waitWhen=false 时跳出的逻辑
     protected abstract void doServerWait(Supplier<Boolean> waitWhen) throws RuntimeException;
+
+    protected abstract void doServerReload() throws RuntimeException;
 
     protected abstract void doServerStop() throws RuntimeException;
 

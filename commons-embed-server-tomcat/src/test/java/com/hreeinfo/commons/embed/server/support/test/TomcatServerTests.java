@@ -51,8 +51,9 @@ public class TomcatServerTests {
         List<String> cps = getTestClassPaths();
 
         EmbedServer server = EmbedServer.Builder.builder()
-                .port(8080).context("/aa").loglevel("INFO")
+                .port(8080).context("/app").loglevel("INFO")
                 .webapp(getTestWebappPath())
+                .reloadLockfile("/tmp/tomcat-embed-reload-test.lock")
                 .classesdir(cps.toArray(new String[cps.size()]))
                 .resourcedir(getTestResourcePath())
                 .build(EmbedTomcatServer.class, e -> System.out.println(e.getClass() + " 配置完成"));

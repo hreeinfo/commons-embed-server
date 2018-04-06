@@ -62,6 +62,11 @@ public interface EmbedServer {
     public Future<?> start(ClassLoader parentLoader, boolean daemon, boolean daemonThread) throws RuntimeException;
 
     /**
+     * 执行context的reload，重新载入webapp
+     */
+    public void reload();
+
+    /**
      * 停止服务 停止服务前指定给定操作
      */
     public void stop();
@@ -74,6 +79,7 @@ public interface EmbedServer {
         private int war = 0;
         private String workingdir = "";
         private String lockfile = "";
+        private String reloadLockfile = "";
         private final List<String> classesdirs = new ArrayList<>();
         private final List<String> resourcesdirs = new ArrayList<>();
         private String configfile = "";
@@ -123,6 +129,11 @@ public interface EmbedServer {
 
         public Builder lockfile(String lockfile) {
             this.lockfile = lockfile;
+            return this;
+        }
+
+        public Builder reloadLockfile(String reloadLockfile) {
+            this.reloadLockfile = reloadLockfile;
             return this;
         }
 
@@ -176,6 +187,7 @@ public interface EmbedServer {
             embedServer.setWar(this.detectWAR());
             embedServer.setWorkingdir(this.workingdir);
             embedServer.setLockfile(this.lockfile);
+            embedServer.setReloadLockfile(this.reloadLockfile);
             embedServer.setConfigfile(this.configfile);
             embedServer.setLoglevel(this.loglevel);
             embedServer.getClassesdirs().addAll(this.classesdirs);
@@ -302,6 +314,7 @@ public interface EmbedServer {
             parser.accepts("webapp").withOptionalArg();
             parser.accepts("workingdir").withOptionalArg();
             parser.accepts("lockfile").withOptionalArg();
+            parser.accepts("reloadLockfile").withOptionalArg();
             parser.accepts("classesdir").withOptionalArg();
             parser.accepts("resourcesdir").withOptionalArg();
             parser.accepts("configfile").withOptionalArg();
@@ -320,6 +333,7 @@ public interface EmbedServer {
             this.webapp = InternalOptParsers.optString(osts, "webapp", "");
             this.workingdir = InternalOptParsers.optString(osts, "workingdir", "");
             this.lockfile = InternalOptParsers.optString(osts, "lockfile", "");
+            this.reloadLockfile = InternalOptParsers.optString(osts, "reloadLockfile", "");
             InternalOptParsers.opt(osts, "classesdir", o -> InternalOptParsers.optAppendPathValues(o, this.classesdirs));
             InternalOptParsers.opt(osts, "resourcesdir", o -> InternalOptParsers.optAppendPathValues(o, this.resourcesdirs));
             this.configfile = InternalOptParsers.optString(osts, "configfile", "");

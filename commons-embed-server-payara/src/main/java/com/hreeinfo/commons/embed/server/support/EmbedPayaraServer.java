@@ -3,7 +3,6 @@ package com.hreeinfo.commons.embed.server.support;
 import com.hreeinfo.commons.embed.server.BaseEmbedServer;
 import com.hreeinfo.commons.embed.server.EmbedServer;
 import com.hreeinfo.commons.embed.server.internal.InternalFactory;
-import com.hreeinfo.commons.embed.server.internal.InternalOptParsers;
 import fish.payara.micro.PayaraMicro;
 import fish.payara.micro.PayaraMicroRuntime;
 import org.apache.commons.lang3.StringUtils;
@@ -73,7 +72,8 @@ public class EmbedPayaraServer extends BaseEmbedServer {
         if (this.getListeners() != null) this.getListeners().forEach(e -> e.onStarting(this));
 
         try {
-            this.runtime.deploy(this.getType(), this.getFullContextPath(false), new File(this.getWebapp()));
+            String dname = this.getFullContextPath(false);
+            this.runtime.deploy(StringUtils.isBlank(dname) ? "ROOT_WEBAPP" : dname, dname, new File(this.getWebapp()));
         } catch (Throwable e) {
             LOG.severe("无法创建实例 " + e.getMessage());
             throw new IllegalStateException("无法创建实例 " + e.getMessage(), e);
@@ -97,6 +97,23 @@ public class EmbedPayaraServer extends BaseEmbedServer {
             this.awaitThread = null;
             this.stopAwait = true;
         }
+    }
+
+    // TODO 需要验证当前服务重载过程中 undeploy 问题
+    @Override
+    protected void doServerReload() throws RuntimeException {
+        String dname = this.getFullContextPath(false);
+        if (StringUtils.isBlank(dname)) dname = "ROOT_WEBAPP";
+
+        try {
+            this.runtime.undeploy(dname);
+        } catch (Throwable e) {
+            LOG.severe("停止context发生错误 " + e.getMessage());
+            throw new IllegalStateException("停止context发生错误 " + e.getMessage(), e);
+        }
+
+
+        this.doServerStart();
     }
 
     @Override
