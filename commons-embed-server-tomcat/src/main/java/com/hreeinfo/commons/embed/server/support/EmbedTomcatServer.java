@@ -131,7 +131,6 @@ public class EmbedTomcatServer extends BaseEmbedServer {
 
     @Override
     protected void doServerReload() throws RuntimeException {
-        if (!this.isReloadable()) return;
         if (this.tomcatContext == null) throw new IllegalStateException("Tomcat Server 未初始化");
         try {
             this.tomcatContext.reload();
@@ -287,7 +286,7 @@ public class EmbedTomcatServer extends BaseEmbedServer {
     }
 
     private boolean isReloadable() {
-        return (StringUtils.isBlank(this.option(OPTION_RELOADABLE))) || this.optionBoolean(OPTION_RELOADABLE);
+        return (StringUtils.isNotBlank(this.option(OPTION_RELOADABLE))) && this.optionBoolean(OPTION_RELOADABLE);
     }
 
     private boolean isExistsWebXml() {
