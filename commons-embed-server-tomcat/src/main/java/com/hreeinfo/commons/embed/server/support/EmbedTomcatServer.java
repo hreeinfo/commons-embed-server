@@ -130,6 +130,16 @@ public class EmbedTomcatServer extends BaseEmbedServer {
     }
 
     @Override
+    protected void doServerReload() throws RuntimeException {
+        if (this.tomcatContext == null) throw new IllegalStateException("Tomcat Server 未初始化");
+        try {
+            this.tomcatContext.reload();
+        } catch (Exception e) {
+            throw new IllegalStateException("重载context发生错误 " + e.getMessage(), e);
+        }
+    }
+
+    @Override
     protected void doServerStop() throws RuntimeException {
         if (this.tomcatServer == null) throw new IllegalStateException("Tomcat Server 未初始化");
         try {
@@ -276,7 +286,7 @@ public class EmbedTomcatServer extends BaseEmbedServer {
     }
 
     private boolean isReloadable() {
-        return (StringUtils.isBlank(this.option(OPTION_RELOADABLE))) || this.optionBoolean(OPTION_RELOADABLE);
+        return (StringUtils.isNotBlank(this.option(OPTION_RELOADABLE))) && this.optionBoolean(OPTION_RELOADABLE);
     }
 
     private boolean isExistsWebXml() {
@@ -293,7 +303,7 @@ public class EmbedTomcatServer extends BaseEmbedServer {
 
     /**
      * 当项目不存在 WEB-INF/classes 时，扫描目标的jar
-     *
+     * <p>
      * TODO 此行为未进行验证
      *
      * @param initContext

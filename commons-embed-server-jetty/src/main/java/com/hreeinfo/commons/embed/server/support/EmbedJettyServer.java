@@ -276,6 +276,38 @@ public class EmbedJettyServer extends BaseEmbedServer {
     }
 
     @Override
+    protected void doServerReload() throws RuntimeException {
+        if (this.handler == null) throw new IllegalStateException("Jetty Server 未初始化");
+        boolean stopped = false;
+        try {
+            this.handler.stop();
+            for (int i = 0; i < 30; i++) {
+                if (this.handler.isStopped()) {
+                    stopped = true;
+                    break;
+                } else {
+                    try {
+                        Thread.sleep(1000);
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            LOG.severe("无法 reload jetty context，请手工执行 stop/start 操作。");
+        }
+
+        if (stopped) {
+            try {
+                this.handler.start();
+            } catch (Throwable e) {
+                LOG.severe("无法 reload jetty context，请手工执行 stop/start 操作。");
+            }
+        } else {
+            LOG.severe("无法 reload jetty context，请手工执行 stop/start 操作。");
+        }
+    }
+
+    @Override
     protected void doServerStop() throws RuntimeException {
         if (this.server == null) throw new IllegalStateException("Jetty Server 未初始化");
         try {

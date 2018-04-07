@@ -1,5 +1,6 @@
 package com.hreeinfo.commons.embed.server.support.test;
 
+import javax.servlet.ServletConfig;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -12,6 +13,18 @@ import java.io.IOException;
  * <p>版权所属：xingxiuyi </p>
  */
 public class TomcatServerTestServlet  extends HttpServlet {
+    @Override
+    public void init(ServletConfig config) throws ServletException {
+        super.init(config);
+        System.out.println("尝试重新初始化 servlet");
+    }
+
+    @Override
+    public void init() throws ServletException {
+        super.init();
+        System.out.println("尝试重新初始化 servlet");
+    }
+
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         resp.getWriter().append("hello tomcat");

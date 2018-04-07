@@ -46,6 +46,11 @@ public class InternalNullServer implements EmbedServer {
     }
 
     @Override
+    public void reload() {
+
+    }
+
+    @Override
     public void stop() {
 
     }
