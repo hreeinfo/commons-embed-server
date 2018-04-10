@@ -3,6 +3,11 @@ buildscript {
         mavenLocal()
         jcenter()
         mavenCentral()
+        if (project.hasProperty("hi_public_url")) {
+            maven {
+                url = project.getProperty("hi_public_url")
+            }
+        }
     }
 
     dependencies {
@@ -17,6 +22,12 @@ configure(allprojects) {
         mavenLocal()
         jcenter()
         mavenCentral()
+
+        if (project.hasProperty("hi_public_url")) {
+            maven {
+                url = project.getProperty("hi_public_url")
+            }
+        }
     }
 
     apply plugin: "com.jfrog.bintray"
@@ -51,13 +62,29 @@ configure(allprojects) {
                 }
             }
         }
+
+        if (project.hasProperty("hi_public_user")) {
+            repositories.maven {
+                name = "hipublic"
+                if (project.version.endsWith("-SNAPSHOT") && project.hasProperty("hi_public_url_snapshot")) {
+                    url = project.hasProperty("hi_public_url_snapshot") ? project.getProperty("hi_public_url_snapshot") : null
+                } else {
+                    url = project.hasProperty("hi_public_url_release") ? project.getProperty("hi_public_url_release") : null
+                }
+
+                credentials {
+                    username = project.hasProperty("hi_public_user") ? project.getProperty("hi_public_user") : null
+                    password = project.hasProperty("hi_public_password") ? project.getProperty("hi_public_password") : null
+                }
+            }
+        }
     }
 
 
 
     bintray {
-        user = project.hasProperty("bintrayUser") ? project.getProperty("bintrayUser") : null
-        key =  project.hasProperty("bintrayKey") ? project.getProperty("bintrayKey") : null
+        user = project.hasProperty("bintray_user") ? project.getProperty("bintray_user") : null
+        key =  project.hasProperty("bintray_key") ? project.getProperty("bintray_key") : null
         publications = ["mavenJava"]
         publish = true
 
@@ -77,15 +104,15 @@ configure(allprojects) {
                 vcsTag = "v$project.version"
                 gpg {
                     sign = true
-                    passphrase = project.hasProperty('gpgPassphrase') ? project.getProperty('gpgPassphrase') : null
+                    passphrase = project.hasProperty("gpg_passphrase") ? project.getProperty("gpg_passphrase") : null
                 }
 
                 /* 当前版本通过 bintray 手工同步 后续自动构建开启
                 mavenCentralSync {
                     sync = true
-                    user = project.hasProperty('mavenCentralUserToken') ? project.getProperty('mavenCentralUserToken') : null
-                    password = project.hasProperty('mavenCentralPassword') ? project.getProperty('mavenCentralPassword') : null
-                    close = '1'
+                    user = project.hasProperty("maven_central_user") ? project.getProperty("maven_central_user") : null
+                    password = project.hasProperty("maven_central_password") ? project.getProperty("maven_central_password") : null
+                    close = "1"
                 }
                  */
             }
@@ -147,12 +174,12 @@ configure(subprojects) {
 
 
     task sourcesJar(type: Jar, dependsOn: classes) {
-        classifier = 'sources'
+        classifier = "sources"
         from sourceSets.main.allSource
     }
 
     task javadocJar(type: Jar, dependsOn: javadoc) {
-        classifier = 'javadoc'
+        classifier = "javadoc"
         from javadoc.destinationDir
     }
 
