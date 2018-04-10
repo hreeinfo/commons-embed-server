@@ -65,7 +65,7 @@ configure(allprojects) {
 
         if (project.hasProperty("hi_public_user")) {
             repositories.maven {
-                name = "hi_public"
+                name = "hipublic"
                 if (project.version.endsWith("-SNAPSHOT") && project.hasProperty("hi_public_url_snapshot")) {
                     url = project.hasProperty("hi_public_url_snapshot") ? project.getProperty("hi_public_url_snapshot") : null
                 } else {
