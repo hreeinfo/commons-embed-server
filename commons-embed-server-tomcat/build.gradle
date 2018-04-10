@@ -5,7 +5,7 @@ dependencies {
 
     // Tomcat application server
     compile("org.apache.tomcat.embed:tomcat-embed-core:${version_tomcat}")
-    compile("org.apache.tomcat.embed:tomcat-embed-logging-juli:${version_tomcat_logging}")
     compile("org.apache.tomcat.embed:tomcat-embed-jasper:${version_tomcat}")
+    compile("org.apache.tomcat.embed:tomcat-embed-logging-juli:${version_tomcat_logging}")
 }
 

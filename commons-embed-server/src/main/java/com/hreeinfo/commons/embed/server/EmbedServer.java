@@ -5,6 +5,7 @@ import com.hreeinfo.commons.embed.server.internal.InternalNullServer;
 import com.hreeinfo.commons.embed.server.internal.InternalOptParsers;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
@@ -301,6 +302,8 @@ public interface EmbedServer {
 
         /**
          * 根据命令行参数构建配置对象
+         * <p>
+         * 可通过 --argsfile=FILE 从文件读取配置参数（避免命令行过长）
          *
          * @param parserConsumer
          * @param optionSetConsumer
@@ -308,6 +311,41 @@ public interface EmbedServer {
          * @return
          */
         public Builder opts(Consumer<OptionParser> parserConsumer, Consumer<OptionSet> optionSetConsumer, String[] args) {
+            List<String> argList = new ArrayList<>();
+
+            if (args == null) args = new String[]{};
+
+            String argsfile = null;
+
+            for (int i = 0; i < args.length; i++) {
+                String a = StringUtils.trimToEmpty(args[i]);
+                if (StringUtils.equalsIgnoreCase(a, "--argsfile")) {
+                    if (i < (args.length - 1)) {
+                        argsfile = StringUtils.trim(args[i + 1]);
+                        break;
+                    }
+                } else if (StringUtils.startsWithIgnoreCase(a, "--argsfile=")) {
+                    argsfile = StringUtils.trim(StringUtils.substringAfter(a, "="));
+                    break;
+                }
+            }
+
+            if (StringUtils.isNotBlank(argsfile)) {
+                LOG.log(Level.INFO, "从文件中载入配置 配置文件 " + argsfile);
+                try {
+                    File esaf = new File(argsfile);
+                    List<String> esas = (esaf.exists() && esaf.isFile()) ? FileUtils.readLines(esaf, "UTF-8") : null;
+                    if (esas != null) esas.forEach(s -> {
+                        String ps = StringUtils.trim(s);
+                        if (StringUtils.isNotBlank(ps)) argList.add(ps);
+                    });
+                } catch (Throwable e) {
+                    LOG.log(Level.WARNING, "读取 " + argsfile + " 文件内容发生错误 - " + e.getMessage(), e);
+                }
+            }
+
+            Collections.addAll(argList, args);
+
             OptionParser parser = new OptionParser();
             parser.accepts("port").withOptionalArg().ofType(Integer.class);
             parser.accepts("context").withOptionalArg();
@@ -322,11 +360,14 @@ public interface EmbedServer {
             parser.accepts("classpath").withOptionalArg();
             parser.accepts("serverClasspath").withOptionalArg();
             parser.accepts("option").withOptionalArg();
+            parser.accepts("argsfile").withOptionalArg();
 
             if (parserConsumer != null) parserConsumer.accept(parser);
 
-            OptionSet osts = parser.parse((args != null) ? args : new String[]{});
+            OptionSet osts = parser.parse(argList.toArray(new String[]{}));
             if (osts == null) return this;
+
+            // 先读取 esargsfile 参数
 
             this.port = InternalOptParsers.optInteger(osts, "port", 8080);
             this.context = InternalOptParsers.optString(osts, "context", "");
