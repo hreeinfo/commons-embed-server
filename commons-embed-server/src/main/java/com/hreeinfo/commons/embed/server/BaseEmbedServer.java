@@ -391,7 +391,7 @@ public abstract class BaseEmbedServer implements EmbedServer {
                             Thread.currentThread().setContextClassLoader(originalClassLoader);
                         }
                     } else {
-                        this.doServerInit(Thread.currentThread().getContextClassLoader(), this.config);
+                        this.doServerInit((parentLoader != null) ? parentLoader : Thread.currentThread().getContextClassLoader(), this.config);
                         this.doServerStart();
                     }
                 } catch (Throwable e) {

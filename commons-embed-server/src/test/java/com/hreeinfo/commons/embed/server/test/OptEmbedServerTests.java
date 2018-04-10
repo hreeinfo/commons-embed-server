@@ -31,6 +31,7 @@ public class OptEmbedServerTests {
         args.add("--option=dd:bb");
         args.add("--option=ss:bb");
         args.add("--option=ee:bb");
+        args.add("--argsfile=somefile");
 
         return args.toArray(new String[]{});
     }

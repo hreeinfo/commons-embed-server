@@ -20,30 +20,44 @@ public final class InternalOptParsers {
     private InternalOptParsers() {
     }
 
+    /**
+     * 返回对象 如果多次定义以最后定义的一个为准
+     *
+     * @param osts
+     * @param name
+     * @return
+     */
+    public static final Object optObject(OptionSet osts, String name) {
+        if (osts == null || StringUtils.isBlank(name)) return null;
+        try {
+            if (osts.has(name)) {
+                List<?> values = osts.valuesOf(name);
+                if (values != null && values.size() > 0) return values.get(values.size() - 1);
+            }
+        } catch (Throwable e) {
+        }
+
+        return null;
+    }
+
     public static final String optString(OptionSet osts, String name, String defaultValue) {
         if (osts == null) return defaultValue;
-        if (osts.has(name)) {
-            Object o = osts.valueOf(name);
-            if (o == null) return defaultValue;
-            String s = o.toString();
-            if (StringUtils.isBlank(s)) return defaultValue;
-            return s;
-        }
-        return defaultValue;
+        Object o = optObject(osts, name);
+        if (o == null) return defaultValue;
+        String s = o.toString();
+        if (StringUtils.isBlank(s)) return defaultValue;
+        return s;
     }
 
     public static final int optInteger(OptionSet osts, String name, int defaultValue) {
         if (osts == null) return defaultValue;
-        if (osts.has(name)) {
-            Object o = osts.valueOf(name);
-            if (o == null) return defaultValue;
+        Object o = optObject(osts, name);
+        if (o == null) return defaultValue;
 
-            int i = 0;
-            if (o instanceof Number) i = ((Number) o).intValue();
+        int i = 0;
+        if (o instanceof Number) i = ((Number) o).intValue();
 
-            return (i == 0) ? defaultValue : i;
-        }
-        return defaultValue;
+        return (i == 0) ? defaultValue : i;
     }
 
     public static final List<String> optString(OptionSet osts, String name) {

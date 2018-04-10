@@ -1,8 +1,8 @@
 buildscript {
     repositories {
         mavenLocal()
-        mavenCentral()
         jcenter()
+        mavenCentral()
     }
 
     dependencies {
@@ -15,8 +15,8 @@ configure(allprojects) {
     version = "${project_version}"
     repositories {
         mavenLocal()
-        mavenCentral()
         jcenter()
+        mavenCentral()
     }
 
     apply plugin: "com.jfrog.bintray"
