@@ -48,6 +48,7 @@ public abstract class BaseEmbedServer implements EmbedServer {
     private String reloadLockfile = "";
     private final List<String> classesdirs = new ArrayList<>();
     private final List<String> resourcesdirs = new ArrayList<>();
+    private final List<String> jars = new ArrayList<>();
     private String configfile = "";
     private String loglevel = "INFO";
     private final Map<String, String> options = new LinkedHashMap<>();
@@ -82,6 +83,10 @@ public abstract class BaseEmbedServer implements EmbedServer {
 
     public List<String> getResourcesdirs() {
         return resourcesdirs;
+    }
+
+    public List<String> getJars() {
+        return jars;
     }
 
     public String getConfigfile() {
