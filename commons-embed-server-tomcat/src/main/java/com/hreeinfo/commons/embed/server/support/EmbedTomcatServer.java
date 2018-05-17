@@ -32,7 +32,6 @@ import java.util.logging.Logger;
 
 /**
  * <p>创建作者：xingxiuyi </p>
- * <p>创建日期：2018/3/23 </p>
  * <p>版权所属：xingxiuyi </p>
  */
 public class EmbedTomcatServer extends BaseEmbedServer {
@@ -260,6 +259,8 @@ public class EmbedTomcatServer extends BaseEmbedServer {
             this.getClassesdirs().forEach(e -> addWebappClassPathResource(initContext, e));
         if (this.getResourcesdirs() != null)
             this.getResourcesdirs().forEach(e -> addWebappWebappResource(initContext, e));
+        if (this.getJars() != null)
+            this.getJars().forEach(e -> addWebappWebinfJar(initContext, e));
     }
 
     /**
@@ -422,6 +423,17 @@ public class EmbedTomcatServer extends BaseEmbedServer {
             try {
                 URL rui = toURL(resource, true);
                 if (rui != null) addTomcatResource(initContext, rui, "/");
+            } catch (Throwable e) {
+                LOG.log(Level.SEVERE, "无法转换 URI -> " + resource, e);
+            }
+        }
+    }
+
+    protected void addWebappWebinfJar(Context initContext, String resource) {
+        if (resource != null) {
+            try {
+                URL rui = toURL(resource, true);
+                if (rui != null) addTomcatResource(initContext, rui, "/WEB-INF/lib");
             } catch (Throwable e) {
                 LOG.log(Level.SEVERE, "无法转换 URI -> " + resource, e);
             }

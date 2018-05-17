@@ -19,7 +19,6 @@ import java.util.logging.Logger;
 
 /**
  * <p>创建作者：xingxiuyi </p>
- * <p>创建日期：2018/3/23 </p>
  * <p>版权所属：xingxiuyi </p>
  */
 public interface EmbedServer {
@@ -83,6 +82,7 @@ public interface EmbedServer {
         private String reloadLockfile = "";
         private final List<String> classesdirs = new ArrayList<>();
         private final List<String> resourcesdirs = new ArrayList<>();
+        private final List<String> jars = new ArrayList<>();
         private String configfile = "";
         private String loglevel = "INFO";
         private final Map<String, String> options = new LinkedHashMap<>();
@@ -153,6 +153,11 @@ public interface EmbedServer {
             return this;
         }
 
+        public Builder jar(String... files) {
+            if (files != null) this.jars.addAll(Arrays.asList(files));
+            return this;
+        }
+
         public Builder listener(LifeCycleListener... lns) {
             if (lns != null) this.listeners.addAll(Arrays.asList(lns));
             return this;
@@ -193,6 +198,7 @@ public interface EmbedServer {
             embedServer.setLoglevel(this.loglevel);
             embedServer.getClassesdirs().addAll(this.classesdirs);
             embedServer.getResourcesdirs().addAll(this.resourcesdirs);
+            embedServer.getJars().addAll(this.jars);
             embedServer.getOptions().putAll(this.options);
 
             embedServer.setConfig(this.config);
@@ -355,6 +361,7 @@ public interface EmbedServer {
             parser.accepts("reloadLockfile").withOptionalArg();
             parser.accepts("classesdir").withOptionalArg();
             parser.accepts("resourcesdir").withOptionalArg();
+            parser.accepts("jar").withOptionalArg();
             parser.accepts("configfile").withOptionalArg();
             parser.accepts("loglevel").withOptionalArg();
             parser.accepts("classpath").withOptionalArg();
@@ -377,6 +384,7 @@ public interface EmbedServer {
             this.reloadLockfile = InternalOptParsers.optString(osts, "reloadLockfile", "");
             InternalOptParsers.opt(osts, "classesdir", o -> InternalOptParsers.optAppendPathValues(o, this.classesdirs));
             InternalOptParsers.opt(osts, "resourcesdir", o -> InternalOptParsers.optAppendPathValues(o, this.resourcesdirs));
+            InternalOptParsers.opt(osts, "jar", o -> InternalOptParsers.optAppendPathValues(o, this.jars));
             this.configfile = InternalOptParsers.optString(osts, "configfile", "");
             this.loglevel = StringUtils.upperCase(InternalOptParsers.optString(osts, "loglevel", "INFO"));
             InternalOptParsers.opt(osts, "classpath", o -> InternalOptParsers.optAppendPathValues(o, this.serverClasspaths));
@@ -405,6 +413,7 @@ public interface EmbedServer {
                     .append("lockfile", lockfile)
                     .append("classesdirs", classesdirs)
                     .append("resourcesdirs", resourcesdirs)
+                    .append("jars", jars)
                     .append("configfile", configfile)
                     .append("loglevel", loglevel)
                     .append("options", options)

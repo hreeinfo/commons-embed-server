@@ -29,7 +29,6 @@ import java.util.logging.Logger;
 /**
  * Jetty Server 实现
  * <p>创建作者：xingxiuyi </p>
- * <p>创建日期：2018/3/23 </p>
  * <p>版权所属：xingxiuyi </p>
  */
 public class EmbedJettyServer extends BaseEmbedServer {
@@ -202,6 +201,15 @@ public class EmbedJettyServer extends BaseEmbedServer {
         if (loader == null) loader = EmbedJettyServer.class.getClassLoader();
 
         initHandler.setClassLoader(new WebAppClassLoader(loader, initHandler));
+
+        final MetaData md = initHandler.getMetaData();
+        if (this.getJars() != null) this.getJars().forEach(f -> {
+            try {
+                md.addWebInfJar(Resource.newResource(f)); // 额外的 inf jar
+            } catch (Throwable e) {
+                LOG.log(Level.WARNING, "jar文件错误：" + f);
+            }
+        });
     }
 
     private void configServer(Server initServer) {

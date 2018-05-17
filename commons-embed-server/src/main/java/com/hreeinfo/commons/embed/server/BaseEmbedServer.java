@@ -25,7 +25,6 @@ import java.util.logging.Logger;
 
 /**
  * <p>创建作者：xingxiuyi </p>
- * <p>创建日期：2018/3/23 </p>
  * <p>版权所属：xingxiuyi </p>
  */
 public abstract class BaseEmbedServer implements EmbedServer {
@@ -48,6 +47,7 @@ public abstract class BaseEmbedServer implements EmbedServer {
     private String reloadLockfile = "";
     private final List<String> classesdirs = new ArrayList<>();
     private final List<String> resourcesdirs = new ArrayList<>();
+    private final List<String> jars = new ArrayList<>();
     private String configfile = "";
     private String loglevel = "INFO";
     private final Map<String, String> options = new LinkedHashMap<>();
@@ -82,6 +82,10 @@ public abstract class BaseEmbedServer implements EmbedServer {
 
     public List<String> getResourcesdirs() {
         return resourcesdirs;
+    }
+
+    public List<String> getJars() {
+        return jars;
     }
 
     public String getConfigfile() {
