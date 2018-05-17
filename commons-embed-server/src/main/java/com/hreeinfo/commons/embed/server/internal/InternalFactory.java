@@ -11,7 +11,6 @@ import java.util.logging.Logger;
 /**
  * 单例工厂类 用于构建单例对象
  * <p>创建作者：xingxiuyi </p>
- * <p>创建日期：2018/3/30 </p>
  * <p>版权所属：xingxiuyi </p>
  */
 public final class InternalFactory {

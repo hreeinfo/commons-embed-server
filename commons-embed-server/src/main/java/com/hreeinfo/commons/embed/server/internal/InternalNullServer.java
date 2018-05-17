@@ -7,7 +7,6 @@ import java.util.concurrent.Future;
 /**
  * 当未找到可用实例时 使用本实例作为服务对象返回值 此服务仅打印警告信息
  * <p>创建作者：xingxiuyi </p>
- * <p>创建日期：2018/3/23 </p>
  * <p>版权所属：xingxiuyi </p>
  */
 public class InternalNullServer implements EmbedServer {
